@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Ambientes e configuração local
+.venv/
+venv/
+env/
+.env
+.env.*
+
+# Sessões do YouTube — nunca versionar
+cookies.txt
+www.youtube.com_cookies.txt
+youtube.com_cookies.txt
+*_cookies.txt
+
+# Saídas geradas
+transcripts/*
+!transcripts/README.md
+transcricoes/
+*.m4a
+*.webm
+*.vtt
+
+# Editores e sistema operacional
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
