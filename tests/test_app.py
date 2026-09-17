@@ -52,6 +52,51 @@ class PlaylistTests(unittest.TestCase):
         self.assertEqual(result["folder"], "minha-playlist-teste-pl-test-123")
         self.assertEqual(len(result["videos"]), 2)
 
+    @patch("app.subprocess.run")
+    def test_playlist_ytdlp_error_is_translated(self, run):
+        run.return_value = subprocess.CompletedProcess(
+            args=[],
+            returncode=1,
+            stdout="",
+            stderr="ERROR: Could not copy Chrome cookie database; DPAPI failed",
+        )
+
+        result = app.expand_target(
+            "https://www.youtube.com/playlist?list=PL_TEST_123", cookies="brave"
+        )
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error"], "Não consegui abrir a playlist.")
+        self.assertIn("Chrome/Edge/Brave", result["detalhes"][0])
+
+    @patch("app.subprocess.run")
+    def test_public_playlist_retries_without_browser_cookies(self, run):
+        cookie_failure = subprocess.CompletedProcess(
+            args=[], returncode=1, stdout="", stderr="ERROR: DPAPI failed"
+        )
+        public_success = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout=json.dumps(
+                {
+                    "id": "PL_TEST_123",
+                    "title": "Playlist pública",
+                    "entries": [{"id": "abcdefghijk", "title": "Um"}],
+                }
+            ),
+            stderr="",
+        )
+        run.side_effect = [cookie_failure, public_success]
+
+        result = app.expand_target(
+            "https://www.youtube.com/playlist?list=PL_TEST_123", cookies="brave"
+        )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(run.call_count, 2)
+        second_command = run.call_args_list[1].args[0]
+        self.assertNotIn("--cookies-from-browser", second_command)
+
 
 class OutputTests(unittest.TestCase):
     @patch("app.core.fetch_via_api")
@@ -87,4 +132,3 @@ class OutputTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

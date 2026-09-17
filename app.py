@@ -168,8 +168,28 @@ def expand_target(url: str, cookies: str | None = None) -> dict:
     except Exception as exc:
         return {"ok": False, "error": f"Não consegui ler a playlist: {exc}"}
 
+    # Cookies do Chrome/Edge/Brave podem falhar antes mesmo de o YouTube ser
+    # consultado. Uma playlist pública não precisa deles, então tenta de novo
+    # anonimamente antes de mostrar erro ao usuário.
+    erro_com_cookies = proc
+    if proc.returncode != 0 and (arquivo_cookies or navegador_cookies):
+        try:
+            proc_sem_cookies = subprocess.run(
+                list(base) + [
+                    "--flat-playlist", "--dump-single-json", "--skip-download", url
+                ],
+                check=False, capture_output=True, text=True,
+                encoding="utf-8", errors="replace", timeout=300,
+            )
+            if proc_sem_cookies.returncode == 0:
+                proc = proc_sem_cookies
+        except Exception:
+            pass
+
     if proc.returncode != 0:
-        detalhe = core._erro_ytdlp(proc.stderr or proc.stdout)
+        detalhe = core._erro_ytdlp(
+            erro_com_cookies, bool(arquivo_cookies or navegador_cookies)
+        )
         return {"ok": False, "error": "Não consegui abrir a playlist.", "detalhes": [detalhe]}
 
     try:

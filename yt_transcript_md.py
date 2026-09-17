@@ -352,7 +352,7 @@ def _erro_ytdlp(proc, tem_cookies: bool) -> str:
     baixo = saida.lower()
 
     if "dpapi" in baixo or "could not copy chrome cookie database" in baixo:
-        return ("o Windows não deixa o yt-dlp ler os cookies do Chrome/Edge (a partir do "
+        return ("o Windows não deixa o yt-dlp ler os cookies do Chrome/Edge/Brave (a partir do "
                 "Chrome 127 eles vêm criptografados). Exporte um cookies.txt com a extensão "
                 "\"Get cookies.txt LOCALLY\", salve na pasta do app e escolha "
                 "\"arquivo cookies.txt\" em COOKIES.")

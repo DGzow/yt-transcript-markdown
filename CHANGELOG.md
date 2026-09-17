@@ -37,6 +37,12 @@ Todas as mudanças relevantes deste projeto. Formato baseado em
 
 ### Corrigido
 
+- A expansão de playlist chamava o tradutor de erros do `yt-dlp` sem o argumento
+  que informa se havia cookies, causando `_erro_ytdlp() missing 1 required positional
+  argument` em vez de mostrar a causa real.
+- Quando a leitura de cookies do Chrome, Edge ou Brave falha, playlists públicas
+  agora são tentadas novamente sem cookies automaticamente.
+
 - **Aviso falso "Falta instalar: yt-dlp" com o yt-dlp instalado.** `checar_dependencias()`
   procurava o executável (`shutil.which("yt-dlp")`), e o `pip install yt-dlp` nem sempre
   deixa um `yt-dlp.exe` no PATH — nesta máquina, `C:\Python314\Scripts` só tem o `pip`.
