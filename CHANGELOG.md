@@ -36,11 +36,11 @@ Todas as mudanças relevantes deste projeto. Formato baseado em
 - **Dica de erro inteligente:** quando a falha é bloqueio de IP ou limite de requisições
   (`IpBlocked`, `RequestBlocked`, `429`, `Too Many Requests`), a dica manda esperar e reduzir a
   fila, e **não** sugere mais o Whisper (ele também baixa o áudio do YouTube, então seria
-  bloqueado igual). A detecção usa `429` para não confundir com "1429".
+  bloqueado igual). A detecção usa `\b429\b` para não confundir com "1429".
 - A mensagem de `IpBlocked` deixou de sugerir `--cookies-from-browser chrome` (não funciona no
   Windows) e passou a sugerir esperar ou usar `cookies.txt`. Vale também para a CLI.
-- **Armadilha do meu próprio script de edição:** escrever `` em texto Python comum gera um
-  caractere de backspace no arquivo, em vez de `` da expressão regular. Os testes de
+- **Armadilha do meu próprio script de edição:** escrever `\b` em texto Python comum gera um
+  caractere de backspace no arquivo, em vez de `\b` da expressão regular. Os testes de
   `foi_bloqueio` pegaram o caso `1429`. Em edição por script, usar string crua (`r"..."`).
 
 ### Alterado — novo visual, com tema claro e escuro (21/09/2026)
