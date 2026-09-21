@@ -20,6 +20,19 @@ class PlaylistTests(unittest.TestCase):
             app.is_playlist_url("https://www.youtube.com/watch?v=abcdefghijk")
         )
 
+    def test_ytdlp_uses_node_when_available(self):
+        # sem runtime JS o yt-dlp falha com "Requested format is not available"
+        with patch("yt_transcript_md.shutil.which", return_value="C:/node.exe"):
+            cmd = app.core.ytdlp_base_cmd()
+        self.assertIn("--js-runtimes", cmd)
+        self.assertEqual(cmd[cmd.index("--js-runtimes") + 1], "node")
+
+    def test_ytdlp_omits_js_runtime_without_node(self):
+        with patch("yt_transcript_md.shutil.which", return_value=None):
+            cmd = app.core.ytdlp_base_cmd()
+        self.assertIsNotNone(cmd)  # o módulo yt_dlp continua sendo achado
+        self.assertNotIn("--js-runtimes", cmd)
+
     def test_watch_later_link_counts_as_playlist(self):
         # o cartão fixo "Assistir mais tarde" da interface usa este link
         self.assertIn("https://www.youtube.com/playlist?list=WL", app.PAGE)

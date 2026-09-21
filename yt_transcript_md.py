@@ -263,9 +263,20 @@ def ytdlp_base_cmd() -> list[str] | None:
     import importlib.util
 
     if importlib.util.find_spec("yt_dlp") is not None:
-        return [sys.executable, "-m", "yt_dlp"]
-    exe = shutil.which("yt-dlp")
-    return [exe] if exe else None
+        base = [sys.executable, "-m", "yt_dlp"]
+    else:
+        exe = shutil.which("yt-dlp")
+        if not exe:
+            return None
+        base = [exe]
+
+    # O YouTube esconde os formatos atrás de um desafio em JavaScript. Sem um runtime
+    # habilitado, o yt-dlp responde "Requested format is not available" e aborta.
+    # Por padrão ele só usa o `deno`; o `node` precisa ser pedido (e o pacote
+    # `yt-dlp-ejs` traz o script que resolve o desafio).
+    if shutil.which("node"):
+        base += ["--js-runtimes", "node"]
+    return base
 
 
 def fetch_via_ytdlp(
@@ -285,6 +296,9 @@ def fetch_via_ytdlp(
         def montar(langs_arg: str) -> list[str]:
             cmd = list(base) + [
                 "--skip-download",
+                # Só queremos o texto: se nenhum formato de vídeo estiver disponível,
+                # isso não pode impedir a gravação da legenda.
+                "--ignore-no-formats-error",
                 "--write-subs",
                 "--write-auto-subs",
                 "--sub-langs", langs_arg,

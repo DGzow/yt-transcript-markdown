@@ -5,6 +5,23 @@ Todas as mudanças relevantes deste projeto. Formato baseado em
 
 ## [Não publicado]
 
+### Corrigido — "Requested format is not available" ao buscar legenda (21/09/2026)
+
+- **Sintoma:** vídeo com legenda automática falhava com `yt-dlp → ERROR: Requested format
+  is not available`, e a `youtube-transcript-api` respondia `IpBlocked`.
+- **Causa 1:** o YouTube protege os formatos com um desafio em JavaScript. O `yt-dlp` só
+  usa o `deno` por padrão; nesta máquina há `node`, que precisa ser pedido com
+  `--js-runtimes node`, e o pacote `yt-dlp-ejs` traz o script do desafio. Sem isso o
+  `yt-dlp` só enxergava imagens, e o erro de formato abortava **antes** de gravar a
+  legenda. Correção em `ytdlp_base_cmd()`, que é usada por legenda, playlist e Whisper.
+  O Whisper precisava disso mais do que todos: ele baixa o áudio.
+- **Causa 2 (rede de segurança):** `--ignore-no-formats-error` na busca de legenda. O app
+  nunca baixa vídeo ali, então a falta de formato não pode impedir a gravação do texto.
+- `yt-dlp-ejs` entrou em `requirements.txt`.
+- **Fora do alcance do código:** o `HTTP 429 Too Many Requests` e o `IpBlocked` são o
+  YouTube limitando o IP depois de muitas requisições seguidas (por exemplo, uma playlist
+  inteira). Passa sozinho com o tempo.
+
 ### Adicionado — cartão "Assistir mais tarde" (21/09/2026)
 
 - Cartão fixo no bloco **Minha conta** que liga/desliga o link
