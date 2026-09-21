@@ -36,6 +36,7 @@ except ImportError:
     sys.exit(1)
 
 import transcricao_audio as audio
+import youtube_conta as conta
 
 # Pasta onde toda transcrição gerada pela interface web é salva automaticamente.
 TRANSCRIPTS_DIR = Path(__file__).parent / "transcripts"
@@ -560,6 +561,28 @@ PAGE = r"""<!doctype html>
     display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;
   }
 
+  [hidden]{display:none!important}
+
+  /* conta do YouTube: login + lista das minhas playlists */
+  .conta{margin-top:20px}
+  .conta-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .conta-msg{font-size:13.5px;color:var(--muted)}
+  .playlists{
+    margin-top:12px;display:grid;gap:6px;max-height:320px;overflow-y:auto;
+    grid-template-columns:repeat(auto-fill,minmax(260px,1fr));
+  }
+  .playlists button{
+    text-align:left;background:var(--surface);border:1px solid var(--line);
+    border-radius:var(--radius);padding:10px 12px;cursor:pointer;font:inherit;color:var(--ink);
+    display:flex;flex-direction:column;gap:2px;
+  }
+  .playlists button:hover{border-color:var(--ink)}
+  .playlists button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+  .playlists button[aria-pressed="true"]{background:var(--ink);color:var(--cc-yellow);border-color:var(--ink)}
+  .playlists .pl-titulo{font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .playlists .pl-info{font-family:'DM Mono',monospace;font-size:11.5px;color:var(--muted)}
+  .playlists button[aria-pressed="true"] .pl-info{color:var(--cc-yellow)}
+
   .toast{
     position:fixed;bottom:26px;left:50%;transform:translateX(-50%) translateY(80px);
     background:var(--ink);color:var(--cc-yellow);
@@ -626,6 +649,16 @@ PAGE = r"""<!doctype html>
 
   <div class="controls whisper-row"><!--WHISPER--></div>
 
+  <section class="conta" aria-label="Conta do YouTube">
+    <div class="conta-bar">
+      <span class="field-label">Minha conta</span>
+      <span class="conta-msg" id="conta-msg">verificando...</span>
+      <button class="btn" id="conta-entrar" hidden>Entrar com Google</button>
+      <button class="btn" id="conta-sair" hidden>Sair</button>
+    </div>
+    <div class="playlists" id="playlists" role="group" aria-label="Minhas playlists"></div>
+  </section>
+
   <p id="status"></p>
   <div class="bulk" id="bulk"></div>
   <div class="results" id="results"></div>
@@ -668,6 +701,83 @@ if ($('wh')) {
   $('wh').addEventListener('change', sync);
   sync();
 }
+
+// ---- conta do YouTube -------------------------------------------------------
+
+const contaMsg = $('conta-msg'), btnEntrar = $('conta-entrar'), btnSair = $('conta-sair');
+
+// Pede ao servidor o estado do login e ajusta botões e mensagem conforme a resposta.
+async function contaAtualizar() {
+  $('playlists').innerHTML = '';
+  btnEntrar.hidden = btnSair.hidden = true;
+  let s;
+  try { s = await (await fetch('/api/conta')).json(); }
+  catch { contaMsg.textContent = 'o servidor local não respondeu'; return; }
+
+  if (s.estado === 'sem_bibliotecas') {
+    contaMsg.textContent = 'faltam as bibliotecas do Google — rode: pip install google-auth-oauthlib google-api-python-client';
+  } else if (s.estado === 'sem_client_secret') {
+    contaMsg.textContent = 'coloque o client_secret.json na pasta do app para poder entrar (veja o README)';
+  } else if (s.estado === 'desconectado') {
+    contaMsg.textContent = 'entre para ver e escolher as suas playlists';
+    btnEntrar.hidden = false;
+  } else {
+    contaMsg.textContent = 'conectado — clique nas playlists para adicioná-las ao campo de links';
+    btnSair.hidden = false;
+    playlistsCarregar();
+  }
+}
+
+async function playlistsCarregar() {
+  const lista = $('playlists');
+  lista.textContent = 'carregando playlists...';
+  let r;
+  try { r = await (await fetch('/api/playlists')).json(); }
+  catch { lista.textContent = 'o servidor local não respondeu'; return; }
+  if (!r.ok) { lista.textContent = ''; contaMsg.textContent = r.error; contaAtualizar(); return; }
+
+  lista.innerHTML = '';
+  if (!r.playlists.length) { lista.textContent = 'Nenhuma playlist encontrada nesta conta.'; return; }
+  for (const p of r.playlists) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.dataset.url = p.url;
+    b.setAttribute('aria-pressed', 'false');
+    b.innerHTML = '<span class="pl-titulo">' + esc(p.titulo) + '</span>' +
+      '<span class="pl-info">' + p.videos + (p.videos === 1 ? ' vídeo' : ' vídeos') + '</span>';
+    lista.appendChild(b);
+  }
+}
+
+// Clicar numa playlist liga/desliga o link dela no campo de texto (uma playlist por linha).
+$('playlists').addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  const linhas = box.value.split('\n').map(s => s.trim()).filter(Boolean);
+  const ligada = linhas.includes(b.dataset.url);
+  const novas = ligada ? linhas.filter(l => l !== b.dataset.url) : [...linhas, b.dataset.url];
+  box.value = novas.join('\n');
+  b.setAttribute('aria-pressed', String(!ligada));
+  grow();
+});
+
+btnEntrar.addEventListener('click', async () => {
+  btnEntrar.disabled = true;
+  contaMsg.textContent = 'aguardando você aprovar na aba que abriu no navegador...';
+  let r;
+  try { r = await (await fetch('/api/conta/entrar', {method: 'POST'})).json(); }
+  catch { r = {ok: false, error: 'o servidor local não respondeu'}; }
+  btnEntrar.disabled = false;
+  if (r.ok) contaAtualizar();
+  else contaMsg.textContent = r.error;   // mantém o botão visível para tentar de novo
+});
+
+btnSair.addEventListener('click', async () => {
+  await fetch('/api/conta/sair', {method: 'POST'});
+  toast('Você saiu da conta');
+  contaAtualizar();
+});
+
+contaAtualizar();
 
 function toast(msg) {
   const t = $('toast'); t.textContent = msg; t.classList.add('show');
@@ -880,10 +990,37 @@ class Handler(BaseHTTPRequestHandler):
                 .replace("<!--WHISPER-->", bloco_whisper())
             )
             self._send(200, html.encode("utf-8"), "text/html; charset=utf-8")
+        elif self.path == "/api/conta":
+            self._json(conta.status())
+        elif self.path == "/api/playlists":
+            try:
+                self._json({"ok": True, "playlists": conta.listar_playlists()})
+            except PermissionError as exc:
+                self._json({"ok": False, "error": str(exc)})
+            except Exception as exc:  # falha de rede, cota estourada etc.
+                self._json({"ok": False, "error": f"Não consegui listar as playlists: {exc}"})
         else:
             self._send(404, b"nao encontrado", "text/plain; charset=utf-8")
 
+    def _json(self, dados: dict):
+        """Atalho: responde um dicionário Python como JSON (equivale a json.dumps + _send)."""
+        corpo = json.dumps(dados, ensure_ascii=False).encode("utf-8")
+        self._send(200, corpo, "application/json; charset=utf-8")
+
     def do_POST(self):
+        if self.path == "/api/conta/entrar":
+            print("  abrindo o login do Google no navegador...")
+            try:
+                conta.entrar()  # bloqueia até você aprovar (ou estourar o tempo limite)
+                self._json({"ok": True})
+            except Exception as exc:
+                self._json({"ok": False, "error": f"Não consegui entrar: {exc}"})
+            return
+        if self.path == "/api/conta/sair":
+            conta.sair()
+            self._json({"ok": True})
+            return
+
         if self.path not in ("/api/transcript", "/api/expand"):
             self._send(404, b"{}", "application/json")
             return

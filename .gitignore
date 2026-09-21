@@ -19,6 +19,10 @@ www.youtube.com_cookies.txt
 youtube.com_cookies.txt
 *_cookies.txt
 
+# Credenciais OAuth do Google e token de login — nunca versionar
+client_secret*.json
+token.json
+
 # Saídas geradas
 transcripts/*
 !transcripts/README.md

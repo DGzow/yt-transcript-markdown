@@ -85,6 +85,32 @@ Escolhendo a pasta de saída e habilitando o Whisper:
 python yt_transcript_md.py URL -o ./transcricoes --whisper small
 ```
 
+## Minhas playlists (login com Google)
+
+O bloco **Minha conta** da interface lista as playlists da sua conta do YouTube. Clique
+em uma (ou em várias) para adicionar o link ao campo de links e depois em **Gerar
+Markdown**. A permissão é somente leitura.
+
+Configuração única, no Google Cloud:
+
+1. Crie um projeto em [console.cloud.google.com](https://console.cloud.google.com).
+2. Em **APIs e serviços → Biblioteca**, ative a **YouTube Data API v3**.
+3. Em **Tela de permissão OAuth**, escolha público **Externo**, adicione o seu e-mail
+   como usuário de teste e o escopo `.../auth/youtube.readonly`.
+4. Em **Credenciais**, crie um **ID do cliente OAuth** do tipo **App para computador**,
+   baixe o JSON e salve na raiz do projeto como `client_secret.json`.
+
+Depois, clique em **Entrar com Google** na interface. O login fica salvo em `token.json`;
+**Sair** apaga esse arquivo.
+
+> **Segurança:** `client_secret.json` e `token.json` são ignorados pelo Git. Não os
+> publique nem os envie a ninguém.
+
+Com o app do Google Cloud em modo **Teste**, o login vale por 7 dias e depois pede nova
+entrada. Publicar o app (aparece um aviso de "app não verificado", normal para uso
+pessoal) remove esse prazo. "Assistir mais tarde" e "Curtidas" não aparecem na lista, por
+limitação da API; para elas, use o `cookies.txt`.
+
 ## Como a transcrição é obtida
 
 O app tenta estes caminhos em ordem:
@@ -118,6 +144,7 @@ confiável.
 |---|---|
 | `app.py` | Servidor local e interface web. |
 | `yt_transcript_md.py` | Extração, conversão para Markdown e CLI. |
+| `youtube_conta.py` | Login com Google e listagem das playlists da conta. |
 | `transcricao_audio.py` | Fallback opcional com Whisper. |
 | `diagnostico.py` | Diagnóstico de dependências e vídeos problemáticos. |
 | `CHANGELOG.md` | Histórico e contexto das alterações. |

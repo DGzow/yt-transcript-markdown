@@ -5,6 +5,30 @@ Todas as mudanças relevantes deste projeto. Formato baseado em
 
 ## [Não publicado]
 
+### Adicionado — login com Google e lista das minhas playlists (21/09/2026)
+
+- **`youtube_conta.py`**: login OAuth com a conta Google e listagem das playlists pela
+  YouTube Data API v3. A interface ganhou o bloco **Minha conta**: botão "Entrar com
+  Google", lista de playlists clicáveis (cada clique liga/desliga o link da playlist no
+  campo de links, então dá para marcar várias) e botão "Sair".
+- **Por que OAuth e não o `cookies.txt`:** o `cookies.txt` entrega a sessão inteira do
+  YouTube e o formato da página que lista playlists muda sem aviso. O OAuth pede uma
+  permissão única e revogável, e a API oficial tem contrato estável.
+- **Escopo `youtube.readonly` (somente leitura):** o app não consegue alterar nem apagar
+  nada na conta.
+- **Arquivos sensíveis:** `client_secret.json` (identifica o app, baixado do Google
+  Cloud) e `token.json` (identifica o usuário, criado no login) entraram no `.gitignore`.
+- **Limites conhecidos:** a "Assistir mais tarde" e as "Curtidas" não aparecem, porque a
+  API não as expõe como playlists comuns. Com o app do Google Cloud em modo **Teste**, o
+  login expira a cada 7 dias; o app detecta, apaga o token vencido e volta ao estado
+  "desconectado" em vez de quebrar.
+- **Bibliotecas importadas dentro das funções:** sem `google-auth-oauthlib` e
+  `google-api-python-client` o app continua abrindo; só o bloco Minha conta avisa.
+- Dependências novas em `requirements.txt`: `google-auth-oauthlib`,
+  `google-api-python-client`. Testes novos em `tests/test_youtube_conta.py`.
+- Rotas novas no servidor local: `GET /api/conta`, `GET /api/playlists`,
+  `POST /api/conta/entrar`, `POST /api/conta/sair`.
+
 ### Adicionado — playlists na interface
 
 - Links de playlist agora são expandidos automaticamente com o `yt-dlp` e todos os
