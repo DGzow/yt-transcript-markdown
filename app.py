@@ -41,6 +41,10 @@ import youtube_conta as conta
 # Pasta onde toda transcrição gerada pela interface web é salva automaticamente.
 TRANSCRIPTS_DIR = Path(__file__).parent / "transcripts"
 
+# Subpasta de transcripts/ para vídeos colados como link direto (sem playlist).
+# Playlists continuam ganhando uma pasta própria; os avulsos não ficam soltos na raiz.
+PASTA_AVULSOS = "avulsos"
+
 # A extração automática de cookies do Chrome/Edge morreu no Windows (Chrome 127+
 # criptografa o banco com app-bound encryption; o yt-dlp responde "Failed to decrypt
 # with DPAPI"). O caminho que ainda funciona é exportar um cookies.txt à mão.
@@ -131,6 +135,19 @@ def is_playlist_url(url: str) -> bool:
     except ValueError:
         return False
     return "list" in query or "/playlist" in parsed.path
+
+
+def ids_ja_transcritos() -> set[str]:
+    """IDs de vídeo que já têm um .md salvo em qualquer pasta de transcripts/.
+
+    Os arquivos se chamam `titulo-do-video-<ID>.md`, e todo ID do YouTube tem 11
+    caracteres, então os últimos 11 caracteres do nome (sem o .md) são o ID.
+    Procura em todas as subpastas (rglob): um vídeo transcrito por outra playlist
+    ou como link avulso também conta como feito.
+    """
+    if not TRANSCRIPTS_DIR.is_dir():
+        return set()
+    return {p.stem[-11:] for p in TRANSCRIPTS_DIR.rglob("*.md") if p.name != "README.md"}
 
 
 def expand_target(url: str, cookies: str | None = None) -> dict:
@@ -226,6 +243,12 @@ def expand_target(url: str, cookies: str | None = None) -> dict:
     title_slug = core.slugify(str(title), max_len=75)
     id_slug = core.slugify(str(playlist_id), max_len=20) if playlist_id else ""
     folder = f"{title_slug}-{id_slug}" if id_slug else title_slug
+
+    # A tela usa isto para não oferecer de novo (por padrão) o que já foi transcrito.
+    feitos = ids_ja_transcritos()
+    for video in videos:
+        video["ja_transcrito"] = video["video_id"] in feitos
+
     return {
         "ok": True, "is_playlist": True, "title": title, "folder": folder, "videos": videos,
     }
@@ -318,10 +341,11 @@ def transcribe(
 
     saved_path = None
     save_error = None
+    # O nome é normalizado novamente no servidor: nunca aceitamos caminhos da tela.
+    # Sem pasta de playlist, o vídeo vai para a subpasta dos avulsos.
+    saved_folder = core.slugify(folder, max_len=100) if folder else PASTA_AVULSOS
     try:
-        # O nome é normalizado novamente no servidor: nunca aceitamos caminhos da tela.
-        saved_folder = core.slugify(folder, max_len=100) if folder else None
-        output_dir = TRANSCRIPTS_DIR / saved_folder if saved_folder else TRANSCRIPTS_DIR
+        output_dir = TRANSCRIPTS_DIR / saved_folder
         output_dir.mkdir(parents=True, exist_ok=True)
         path = output_dir / filename
         path.write_text(markdown, encoding="utf-8")
@@ -341,7 +365,7 @@ def transcribe(
         "markdown": markdown,
         "filename": filename,
         "saved_path": saved_path,
-        "saved_folder": core.slugify(folder, max_len=100) if folder else None,
+        "saved_folder": saved_folder,
         "save_error": save_error,
     }
 
@@ -350,757 +374,20 @@ def transcribe(
 # HTML
 # --------------------------------------------------------------------------- #
 
-PAGE = r"""<!doctype html>
-<html lang="pt-BR">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Transcrição de vídeo em Markdown</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;800&family=DM+Mono:wght@400;500&family=Karla:wght@400;500;700&display=swap" rel="stylesheet">
-<style>
-  :root{
-    --ink:#10131A;
-    --ink-soft:#2A2F3C;
-    --paper:#E4E7EC;
-    --surface:#FFFFFF;
-    --muted:#697086;
-    --line:#CDD2DB;
-    --cc-yellow:#F2D544;
-    --cc-cyan:#5EC6D6;
-    --danger:#C4453B;
-    --radius:4px;
-  }
-  *{box-sizing:border-box}
-  html,body{margin:0;padding:0}
-  body{
-    background:var(--paper);
-    color:var(--ink);
-    font-family:'Karla',system-ui,sans-serif;
-    font-size:16px;
-    line-height:1.55;
-    -webkit-font-smoothing:antialiased;
-  }
-  .wrap{max-width:940px;margin:0 auto;padding:48px 24px 96px}
-
-  /* ---------- cabeçalho ---------- */
-  .eyebrow{
-    font-family:'DM Mono',monospace;
-    font-size:11px;letter-spacing:.18em;text-transform:uppercase;
-    color:var(--muted);margin:0 0 14px;
-    display:flex;align-items:center;gap:10px;
-  }
-  .eyebrow::after{content:"";flex:1;height:1px;background:var(--line)}
-  h1{
-    font-family:'Archivo',sans-serif;font-weight:800;
-    font-size:clamp(30px,5.2vw,52px);line-height:1.02;
-    letter-spacing:-.02em;margin:0 0 12px;
-  }
-  .lede{color:var(--ink-soft);max-width:52ch;margin:0 0 34px;font-size:17px}
-
-  /* ---------- barra de legenda (elemento assinatura) ---------- */
-  .caption-bar{
-    position:relative;background:var(--ink);border-radius:var(--radius);
-    padding:32px 22px 18px;box-shadow:0 12px 30px -18px rgba(16,19,26,.75);
-  }
-  .cc-badge{
-    position:absolute;top:12px;left:22px;
-    font-family:'DM Mono',monospace;font-size:10px;font-weight:500;
-    letter-spacing:.16em;color:var(--ink);background:var(--cc-yellow);
-    padding:2px 7px;border-radius:2px;
-  }
-  .cc-badge.live{animation:pulse 1.1s ease-in-out infinite}
-  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
-
-  #urls{
-    width:100%;border:0;outline:0;resize:none;background:transparent;
-    color:#F7F8FA;font-family:'DM Mono',monospace;font-size:15px;line-height:1.75;
-    min-height:27px;caret-color:var(--cc-yellow);
-  }
-  #urls::placeholder{color:#5B6376}
-  #urls:focus-visible{outline:0}
-  .caption-bar:focus-within{box-shadow:0 0 0 2px var(--cc-yellow),0 12px 30px -18px rgba(16,19,26,.75)}
-  .scanline{height:2px;background:#242936;margin-top:14px;overflow:hidden}
-  .scanline i{display:block;height:100%;width:34%;background:var(--cc-yellow);
-    transform:translateX(-100%);}
-  .scanline.on i{animation:scan 1.1s linear infinite}
-  @keyframes scan{to{transform:translateX(300%)}}
-
-  /* ---------- controles ---------- */
-  .controls{display:flex;flex-wrap:wrap;gap:14px;align-items:center;margin-top:18px}
-  .field{display:flex;align-items:center;gap:8px}
-  .field-label{
-    font-family:'DM Mono',monospace;font-size:11px;letter-spacing:.14em;
-    text-transform:uppercase;color:var(--muted);
-  }
-  .chips{display:flex;border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
-  .chips button{
-    font-family:'DM Mono',monospace;font-size:12px;letter-spacing:.06em;
-    background:var(--surface);border:0;border-right:1px solid var(--line);
-    padding:8px 13px;cursor:pointer;color:var(--ink-soft);
-  }
-  .chips button:last-child{border-right:0}
-  .chips button[aria-pressed="true"]{background:var(--ink);color:var(--cc-yellow)}
-  .chips button:focus-visible{outline:2px solid var(--ink);outline-offset:-2px}
-
-  .picker{
-    font-family:'DM Mono',monospace;font-size:12px;color:var(--ink-soft);
-    background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
-    padding:8px 10px;cursor:pointer;
-  }
-  .picker:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
-
-  .err-detail{
-    font-family:'DM Mono',monospace;font-size:11.5px;line-height:1.7;
-    color:var(--muted);margin:10px 0 0;padding:10px 12px;
-    background:#FBF3F2;border-left:2px solid var(--danger);
-    white-space:pre-wrap;word-break:break-word;
-  }
-  .err-hint{font-size:13.5px;color:var(--ink-soft);margin:10px 0 0}
-
-  .switch{display:flex;align-items:center;gap:9px;cursor:pointer;user-select:none}
-  .switch input{position:absolute;opacity:0;width:0;height:0}
-  .track{width:38px;height:21px;border-radius:11px;background:#C2C8D2;
-    border:1px solid var(--line);position:relative;transition:background .15s}
-  .track::after{content:"";position:absolute;top:2px;left:2px;width:15px;height:15px;
-    border-radius:50%;background:var(--surface);transition:transform .15s;
-    box-shadow:0 1px 2px rgba(0,0,0,.25)}
-  .switch input:checked + .track{background:var(--ink)}
-  .switch input:checked + .track::after{transform:translateX(17px);background:var(--cc-yellow)}
-  .switch input:focus-visible + .track{outline:2px solid var(--ink);outline-offset:2px}
-  .switch span:last-child{font-size:14px;color:var(--ink-soft)}
-
-  .go{
-    margin-left:auto;font-family:'Archivo',sans-serif;font-weight:600;font-size:15px;
-    background:var(--ink);color:var(--surface);border:0;border-radius:var(--radius);
-    padding:12px 26px;cursor:pointer;transition:transform .1s,background .15s;
-  }
-  .go:hover:not(:disabled){background:#000}
-  .go:active:not(:disabled){transform:translateY(1px)}
-  .go:disabled{opacity:.45;cursor:not-allowed}
-  .go:focus-visible{outline:2px solid var(--ink);outline-offset:3px}
-
-  /* ---------- status ---------- */
-  #status{
-    font-family:'DM Mono',monospace;font-size:12.5px;color:var(--muted);
-    margin-top:22px;min-height:20px;
-  }
-  #status b{color:var(--ink);font-weight:500}
-
-  /* ---------- resultados ---------- */
-  .results{margin-top:34px;display:flex;flex-direction:column;gap:18px}
-  .card{
-    background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
-    overflow:hidden;animation:rise .28s ease-out;
-  }
-  @keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
-  .card-head{padding:18px 20px;border-bottom:1px solid var(--line)}
-  .card-title{font-family:'Archivo',sans-serif;font-weight:600;font-size:18px;
-    line-height:1.25;margin:0 0 8px;letter-spacing:-.01em}
-  .meta{display:flex;flex-wrap:wrap;gap:6px 18px;
-    font-family:'DM Mono',monospace;font-size:11.5px;color:var(--muted)}
-  .meta b{color:var(--ink-soft);font-weight:500}
-  .preview{
-    margin:0;padding:18px 20px;max-height:300px;overflow:auto;
-    background:#F7F8FA;border-bottom:1px solid var(--line);
-    font-family:'DM Mono',monospace;font-size:12.5px;line-height:1.72;
-    white-space:pre-wrap;word-break:break-word;color:var(--ink-soft);
-  }
-  .preview .tc{color:#1E7C8C;font-weight:500}
-  .preview .fm{color:var(--muted)}
-  .card-foot{display:flex;gap:10px;padding:14px 20px;flex-wrap:wrap}
-  .btn{
-    font-family:'Karla',sans-serif;font-size:14px;font-weight:500;
-    background:var(--surface);color:var(--ink);border:1px solid var(--line);
-    border-radius:var(--radius);padding:9px 16px;cursor:pointer;transition:border-color .15s;
-  }
-  .btn:hover{border-color:var(--ink)}
-  .btn:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
-  .btn.primary{background:var(--ink);color:var(--surface);border-color:var(--ink)}
-  .card.error{border-color:var(--danger)}
-  .card.error .card-head{border-bottom:0}
-  .err{color:var(--danger);font-size:14.5px;margin:0}
-
-  .warn{
-    background:#FFF9E3;border:1px solid #E0CE7A;border-left:3px solid var(--cc-yellow);
-    border-radius:var(--radius);padding:16px 18px;margin:0 0 26px;
-  }
-  .warn h2{font-family:'Archivo',sans-serif;font-size:15px;margin:0 0 6px;font-weight:600}
-  .warn p{margin:0 0 10px;font-size:14.5px;color:var(--ink-soft)}
-  .warn code{
-    display:block;font-family:'DM Mono',monospace;font-size:12.5px;
-    background:var(--ink);color:var(--cc-yellow);padding:11px 14px;
-    border-radius:var(--radius);overflow-x:auto;white-space:nowrap;
-  }
-  .warn small{display:block;margin-top:9px;font-family:'DM Mono',monospace;
-    font-size:11px;color:var(--muted);word-break:break-all}
-
-  .empty{
-    margin-top:34px;padding:34px 20px;text-align:center;color:var(--muted);
-    border:1px dashed var(--line);border-radius:var(--radius);
-  }
-  .empty p{margin:0;font-size:14.5px}
-
-  .bulk{display:flex;justify-content:flex-end;margin-top:4px}
-
-  /* ---------- linha do Whisper ---------- */
-  .whisper-row{margin-top:12px;padding-top:14px;border-top:1px dashed var(--line)}
-  .whisper-row .hint{
-    font-size:13px;color:var(--muted);margin:0;flex-basis:100%;
-  }
-  .whisper-row .picker:disabled{opacity:.4;cursor:not-allowed}
-  .whisper-row code{
-    font-family:'DM Mono',monospace;font-size:12px;
-    background:var(--ink);color:var(--cc-yellow);padding:2px 6px;border-radius:2px;
-  }
-
-  footer{
-    margin-top:56px;padding-top:20px;border-top:1px solid var(--line);
-    font-family:'DM Mono',monospace;font-size:11.5px;color:var(--muted);
-    display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;
-  }
-
-  [hidden]{display:none!important}
-
-  /* conta do YouTube: login + lista das minhas playlists */
-  .conta{margin-top:20px}
-  .conta-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
-  .conta-msg{font-size:13.5px;color:var(--muted)}
-  .playlists{
-    margin-top:12px;display:grid;gap:6px;max-height:320px;overflow-y:auto;
-    grid-template-columns:repeat(auto-fill,minmax(260px,1fr));
-  }
-  .playlists button{
-    text-align:left;background:var(--surface);border:1px solid var(--line);
-    border-radius:var(--radius);padding:10px 12px;cursor:pointer;font:inherit;color:var(--ink);
-    display:flex;flex-direction:column;gap:2px;
-  }
-  .playlists button:hover{border-color:var(--ink)}
-  .playlists button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
-  .playlists button[aria-pressed="true"]{background:var(--ink);color:var(--cc-yellow);border-color:var(--ink)}
-  .playlists .pl-titulo{font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .playlists .pl-info{font-family:'DM Mono',monospace;font-size:11.5px;color:var(--muted)}
-  .playlists button[aria-pressed="true"] .pl-info{color:var(--cc-yellow)}
-
-  /* escolha dos vídeos de uma playlist antes de transcrever */
-  .seletor{
-    margin-top:20px;background:var(--surface);border:1px solid var(--line);
-    border-radius:var(--radius);padding:16px;
-  }
-  .sel-barra{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-  .sel-busca{
-    flex:1;min-width:180px;font:inherit;font-size:14px;padding:8px 10px;
-    border:1px solid var(--line);border-radius:var(--radius);color:var(--ink);background:var(--surface);
-  }
-  .sel-busca:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
-  .sel-cont{margin-left:auto;font-family:'DM Mono',monospace;font-size:12px;color:var(--muted)}
-  .sel-grupo h3{font-family:'Archivo',sans-serif;font-weight:600;font-size:15px;margin:16px 0 6px}
-  .sel-lista{max-height:420px;overflow-y:auto;border:1px solid var(--line);border-radius:var(--radius)}
-  .sel-item{
-    display:flex;gap:10px;align-items:flex-start;padding:8px 12px;cursor:pointer;
-    font-size:14px;border-bottom:1px solid var(--line);
-  }
-  .sel-item:last-child{border-bottom:0}
-  .sel-item:hover{background:var(--paper)}
-  .sel-item input{margin-top:3px;accent-color:var(--ink)}
-  .sel-rodape{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:14px}
-  .sel-rodape .btn.primary:disabled{opacity:.45;cursor:not-allowed}
-  .sel-nota{font-size:13px;color:var(--muted)}
-
-  .toast{
-    position:fixed;bottom:26px;left:50%;transform:translateX(-50%) translateY(80px);
-    background:var(--ink);color:var(--cc-yellow);
-    font-family:'DM Mono',monospace;font-size:12.5px;letter-spacing:.05em;
-    padding:11px 20px;border-radius:var(--radius);opacity:0;
-    transition:transform .22s,opacity .22s;pointer-events:none;z-index:10;
-  }
-  .toast.show{transform:translateX(-50%) translateY(0);opacity:1}
-
-  @media (max-width:640px){
-    .wrap{padding:32px 16px 72px}
-    .go{margin-left:0;width:100%}
-    .controls{gap:12px}
-  }
-  @media (prefers-reduced-motion:reduce){
-    *{animation:none!important;transition:none!important}
-  }
-</style>
-</head>
-<body>
-<div class="wrap">
-  <p class="eyebrow">roda na sua máquina</p>
-  <h1>Transcrição de vídeo em Markdown</h1>
-  <p class="lede">Cole o link de um vídeo ou playlist do YouTube. Você também pode usar um link por linha.</p>
-  <!--AVISO-->
-
-  <div class="caption-bar">
-    <span class="cc-badge" id="badge">CC</span>
-    <textarea id="urls" rows="1" spellcheck="false"
-      placeholder="https://www.youtube.com/watch?v=... ou https://www.youtube.com/playlist?list=..."></textarea>
-    <div class="scanline" id="scan"><i></i></div>
-  </div>
-
-  <div class="controls">
-    <div class="field">
-      <span class="field-label">Idioma</span>
-      <div class="chips" id="langs" role="group" aria-label="Idioma da legenda">
-        <button type="button" data-lang="pt" aria-pressed="true">PT</button>
-        <button type="button" data-lang="en" aria-pressed="false">EN</button>
-        <button type="button" data-lang="es" aria-pressed="false">ES</button>
-        <button type="button" data-lang="auto" aria-pressed="false">QUALQUER</button>
-      </div>
-    </div>
-    <div class="field">
-      <span class="field-label">Cookies</span>
-      <select class="picker" id="cookies" title="Empresta a sessão logada quando o YouTube esconde a legenda">
-        <option value="">nenhum</option>
-        <!--COOKIES_ARQUIVO-->
-        <option value="chrome">chrome</option>
-        <option value="firefox">firefox</option>
-        <option value="edge">edge</option>
-        <option value="brave">brave</option>
-        <option value="opera">opera</option>
-        <option value="safari">safari</option>
-      </select>
-    </div>
-    <label class="switch">
-      <input type="checkbox" id="ts" checked>
-      <span class="track"></span>
-      <span>Marcar tempos</span>
-    </label>
-    <button class="go" id="go">Gerar Markdown</button>
-  </div>
-
-  <div class="controls whisper-row"><!--WHISPER--></div>
-
-  <section class="conta" aria-label="Conta do YouTube">
-    <div class="conta-bar">
-      <span class="field-label">Minha conta</span>
-      <span class="conta-msg" id="conta-msg">verificando...</span>
-      <button class="btn" id="conta-entrar" hidden>Entrar com Google</button>
-      <button class="btn" id="conta-sair" hidden>Sair</button>
-    </div>
-    <!-- Listas que a API do Google não entrega: só o cookies.txt alcança. Ficam sempre visíveis. -->
-    <div class="playlists" id="fixas" role="group" aria-label="Listas que usam cookies">
-      <button type="button" data-url="https://www.youtube.com/playlist?list=WL"
-        data-cookies="1" aria-pressed="false">
-        <span class="pl-titulo">Assistir mais tarde</span>
-        <span class="pl-info">usa o cookies.txt</span>
-      </button>
-    </div>
-    <div class="playlists" id="playlists" role="group" aria-label="Minhas playlists"></div>
-  </section>
-
-  <p id="status"></p>
-  <div class="seletor" id="seletor" hidden></div>
-  <div class="bulk" id="bulk"></div>
-  <div class="results" id="results"></div>
-
-  <div class="empty" id="empty">
-    <p>Nada aqui ainda. Cole um link acima para começar.</p>
-  </div>
-
-  <footer>
-    <span>servidor local · 127.0.0.1</span>
-    <span>legenda → markdown · v2.1</span>
-  </footer>
-</div>
-
-<div class="toast" id="toast"></div>
-
-<script>
-const $ = (id) => document.getElementById(id);
-const box = $('urls'), results = $('results'), statusEl = $('status');
-let lang = 'pt', done = [];
-
-// textarea que cresce conforme você cola
-const grow = () => { box.style.height = 'auto'; box.style.height = box.scrollHeight + 'px'; };
-box.addEventListener('input', grow);
-
-$('langs').addEventListener('click', (e) => {
-  const btn = e.target.closest('button'); if (!btn) return;
-  lang = btn.dataset.lang;
-  [...$('langs').children].forEach(b => b.setAttribute('aria-pressed', b === btn));
-});
-
-box.addEventListener('keydown', (e) => {
-  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') run();
-});
-$('go').addEventListener('click', run);
-
-// o seletor de modelo só faz sentido com o Whisper ligado
-if ($('wh')) {
-  const sync = () => { $('whmodel').disabled = !$('wh').checked; };
-  $('wh').addEventListener('change', sync);
-  sync();
-}
-
-// ---- conta do YouTube -------------------------------------------------------
-
-const contaMsg = $('conta-msg'), btnEntrar = $('conta-entrar'), btnSair = $('conta-sair');
-
-// Pede ao servidor o estado do login e ajusta botões e mensagem conforme a resposta.
-async function contaAtualizar() {
-  $('playlists').innerHTML = '';
-  btnEntrar.hidden = btnSair.hidden = true;
-  let s;
-  try { s = await (await fetch('/api/conta')).json(); }
-  catch { contaMsg.textContent = 'o servidor local não respondeu'; return; }
-
-  if (s.estado === 'sem_bibliotecas') {
-    contaMsg.textContent = 'faltam as bibliotecas do Google — rode: pip install google-auth-oauthlib google-api-python-client';
-  } else if (s.estado === 'sem_client_secret') {
-    contaMsg.textContent = 'coloque o client_secret.json na pasta do app para poder entrar (veja o README)';
-  } else if (s.estado === 'desconectado') {
-    contaMsg.textContent = 'entre para ver e escolher as suas playlists';
-    btnEntrar.hidden = false;
-  } else {
-    contaMsg.textContent = 'conectado — clique nas playlists para adicioná-las ao campo de links';
-    btnSair.hidden = false;
-    playlistsCarregar();
-  }
-}
-
-async function playlistsCarregar() {
-  const lista = $('playlists');
-  lista.textContent = 'carregando playlists...';
-  let r;
-  try { r = await (await fetch('/api/playlists')).json(); }
-  catch { lista.textContent = 'o servidor local não respondeu'; return; }
-  if (!r.ok) { lista.textContent = ''; contaMsg.textContent = r.error; contaAtualizar(); return; }
-
-  lista.innerHTML = '';
-  if (!r.playlists.length) { lista.textContent = 'Nenhuma playlist encontrada nesta conta.'; return; }
-  for (const p of r.playlists) {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.dataset.url = p.url;
-    b.setAttribute('aria-pressed', 'false');
-    b.innerHTML = '<span class="pl-titulo">' + esc(p.titulo) + '</span>' +
-      '<span class="pl-info">' + p.videos + (p.videos === 1 ? ' vídeo' : ' vídeos') + '</span>';
-    lista.appendChild(b);
-  }
-}
-
-// Clicar num cartão liga/desliga o link dele no campo de texto (um link por linha).
-// Serve tanto para as playlists da conta quanto para os cartões fixos (#fixas).
-function alternarLink(e) {
-  const b = e.target.closest('button'); if (!b) return;
-  const linhas = box.value.split('\n').map(s => s.trim()).filter(Boolean);
-  const ligada = linhas.includes(b.dataset.url);
-  const novas = ligada ? linhas.filter(l => l !== b.dataset.url) : [...linhas, b.dataset.url];
-  box.value = novas.join('\n');
-  b.setAttribute('aria-pressed', String(!ligada));
-  grow();
-
-  // Cartão que depende do cookies.txt: já deixa o seletor de cookies pronto.
-  if (b.dataset.cookies && !ligada) {
-    const opcao = [...$('cookies').options].find(o => o.value === 'arquivo');
-    if (opcao && !opcao.disabled) $('cookies').value = 'arquivo';
-    else toast('Falta o cookies.txt na pasta do app (veja o README)');
-  }
-}
-$('playlists').addEventListener('click', alternarLink);
-$('fixas').addEventListener('click', alternarLink);
-
-btnEntrar.addEventListener('click', async () => {
-  btnEntrar.disabled = true;
-  contaMsg.textContent = 'aguardando você aprovar na aba que abriu no navegador...';
-  let r;
-  try { r = await (await fetch('/api/conta/entrar', {method: 'POST'})).json(); }
-  catch { r = {ok: false, error: 'o servidor local não respondeu'}; }
-  btnEntrar.disabled = false;
-  if (r.ok) contaAtualizar();
-  else contaMsg.textContent = r.error;   // mantém o botão visível para tentar de novo
-});
-
-btnSair.addEventListener('click', async () => {
-  await fetch('/api/conta/sair', {method: 'POST'});
-  toast('Você saiu da conta');
-  contaAtualizar();
-});
-
-contaAtualizar();
-
-function toast(msg) {
-  const t = $('toast'); t.textContent = msg; t.classList.add('show');
-  clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove('show'), 2000);
-}
-
-const esc = (s) => s.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
-
-function stripFrontmatter(md) {
-  // o .md salvo mantém o frontmatter; aqui ele só atrapalharia a leitura
-  const m = md.match(/^---\n[\s\S]*?\n---\n+/);
-  return m ? md.slice(m[0].length) : md;
-}
-
-function highlight(md) {
-  return esc(stripFrontmatter(md)).split('\n').map(l =>
-    l.replace(/^\*\*\[([\d:]+)\]\([^)]+\)\*\*/, '<span class="tc">[$1]</span>')
-  ).join('\n');
-}
-
-function langsFor(code) {
-  if (code === 'auto') return ['pt', 'pt-BR', 'en', 'es'];
-  if (code === 'pt') return ['pt', 'pt-BR'];
-  return [code];
-}
-
-function download(name, text) {
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([text], {type: 'text/markdown;charset=utf-8'}));
-  a.download = name; a.click(); URL.revokeObjectURL(a.href);
-}
-
-function renderCard(data) {
-  const card = document.createElement('div');
-  card.className = 'card' + (data.ok ? '' : ' error');
-
-  if (!data.ok) {
-    const detalhes = (data.detalhes || []).length
-      ? '<p class="err-detail">' + esc(data.detalhes.join('\n')) + '</p>' : '';
-    const dica = data.dica ? '<p class="err-hint">' + esc(data.dica) + '</p>' : '';
-    card.innerHTML = '<div class="card-head">' +
-      '<h2 class="card-title">' + esc(data.title || 'Não deu para transcrever') + '</h2>' +
-      '<p class="err">' + esc(data.error) + '</p>' + detalhes + dica + '</div>';
-    results.appendChild(card);
-    return;
-  }
-
-  card.innerHTML =
-    '<div class="card-head">' +
-      '<h2 class="card-title">' + esc(data.title) + '</h2>' +
-      '<div class="meta">' +
-        (data.channel ? '<span>canal <b>' + esc(data.channel) + '</b></span>' : '') +
-        '<span>duração <b>' + esc(data.duration) + '</b></span>' +
-        '<span>palavras <b>' + data.words.toLocaleString('pt-BR') + '</b></span>' +
-        '<span>idioma <b>' + esc(data.language) + '</b></span>' +
-        '<span>arquivo <b>' + esc(data.filename) + '</b></span>' +
-        (data.saved_path
-          ? '<span>salvo em <b>transcripts/' + (data.saved_folder ? esc(data.saved_folder) + '/' : '') + '</b></span>'
-          : '<span style="color:var(--danger)">não salvou automaticamente</span>') +
-      '</div>' +
-    '</div>' +
-    '<pre class="preview">' + highlight(data.markdown) + '</pre>' +
-    '<div class="card-foot">' +
-      '<button class="btn primary" data-act="dl">Baixar .md</button>' +
-      '<button class="btn" data-act="copy">Copiar</button>' +
-      '<button class="btn" data-act="open">Abrir no YouTube</button>' +
-    '</div>';
-
-  card.querySelector('[data-act="dl"]').onclick = () => {
-    download(data.filename, data.markdown); toast('Arquivo baixado');
-  };
-  card.querySelector('[data-act="copy"]').onclick = async () => {
-    await navigator.clipboard.writeText(data.markdown); toast('Markdown copiado');
-  };
-  card.querySelector('[data-act="open"]').onclick = () => {
-    window.open('https://www.youtube.com/watch?v=' + data.video_id, '_blank');
-  };
-
-  results.appendChild(card);
-}
-
-function renderBulk() {
-  const bulk = $('bulk'); bulk.innerHTML = '';
-  if (done.length < 2) return;
-  const b = document.createElement('button');
-  b.className = 'btn'; b.textContent = 'Baixar todos (' + done.length + ')';
-  b.onclick = () => {
-    done.forEach((d, i) => setTimeout(() => download(d.filename, d.markdown), i * 350));
-    toast('Baixando ' + done.length + ' arquivos');
-  };
-  bulk.appendChild(b);
-}
-
-async function run() {
-  const inputs = box.value.split('\n').map(s => s.trim()).filter(Boolean);
-  if (!inputs.length) { box.focus(); toast('Cole um link primeiro'); return; }
-
-  ocupado(true);
-  $('empty').style.display = 'none';
-  $('seletor').hidden = true; $('seletor').innerHTML = '';
-  results.innerHTML = ''; done = []; renderBulk();
-
-  // Etapa 1: ler cada link. Playlist vira uma lista de vídeos; vídeo avulso passa direto.
-  const grupos = [];
-  for (let i = 0; i < inputs.length; i++) {
-    statusEl.innerHTML = 'lendo link <b>' + (i + 1) + '/' + inputs.length + '</b> — ' +
-      esc(inputs[i].slice(0, 60));
-    try {
-      const res = await fetch('/api/expand', {
-        method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({url: inputs[i], cookies: $('cookies').value})
-      });
-      const expanded = await res.json();
-      if (!expanded.ok) { renderCard(expanded); continue; }
-      grupos.push(expanded);
-    } catch (err) {
-      renderCard({ok: false, error: 'O servidor local não respondeu ao ler a playlist.'});
-    }
-  }
-
-  ocupado(false);
-  if (!grupos.some(g => g.videos.length)) {
-    statusEl.textContent = 'nenhum vídeo encontrado';
-    if (!results.children.length) $('empty').style.display = '';
-    return;
-  }
-
-  // Só vídeos avulsos: segue direto. Havendo playlist, para aqui para você escolher.
-  if (!grupos.some(g => g.is_playlist)) return transcrever(montarJobs(grupos));
-  mostrarSeletor(grupos);
-}
-
-// Liga/desliga o "ocupado": botão travado, faixa de varredura e selo CC animados.
-function ocupado(on) {
-  $('go').disabled = on;
-  $('scan').classList.toggle('on', on);
-  $('badge').classList.toggle('live', on);
-}
-
-// Transforma os grupos em fila de trabalho. `marcados` é o conjunto de vídeos escolhidos
-// nas playlists (chave "índice do grupo|id do vídeo"); vídeo avulso entra sempre.
-function montarJobs(grupos, marcados) {
-  const jobs = [], seen = new Set();
-  grupos.forEach((g, gi) => g.videos.forEach(v => {
-    if (g.is_playlist && marcados && !marcados.has(gi + '|' + v.video_id)) return;
-    const key = v.video_id + '|' + (g.folder || '');
-    if (seen.has(key)) return;   // mesmo vídeo repetido na mesma pasta
-    seen.add(key);
-    jobs.push({url: v.url, video_id: v.video_id, title: v.title,
-      folder: g.folder, playlist_title: g.title});
-  }));
-  return jobs;
-}
-
-// Etapa 2 (intermediária): lista os vídeos de cada playlist com caixas de marcar.
-function mostrarSeletor(grupos) {
-  const painel = $('seletor');
-  painel.innerHTML = ''; painel.hidden = false;
-  statusEl.innerHTML = 'escolha quais vídeos transcrever';
-  const avulsos = grupos.filter(g => !g.is_playlist).reduce((n, g) => n + g.videos.length, 0);
-
-  const barra = document.createElement('div');
-  barra.className = 'sel-barra';
-  barra.innerHTML =
-    '<input type="search" class="sel-busca" placeholder="Filtrar por título..." aria-label="Filtrar vídeos">' +
-    '<button type="button" class="btn" data-a="todos">Marcar todos</button>' +
-    '<button type="button" class="btn" data-a="nenhum">Desmarcar todos</button>' +
-    '<span class="sel-cont" id="sel-cont"></span>';
-  painel.appendChild(barra);
-
-  grupos.forEach((g, gi) => {
-    if (!g.is_playlist) return;
-    const sec = document.createElement('section');
-    sec.className = 'sel-grupo';
-    const h = document.createElement('h3');
-    h.textContent = (g.title || 'Playlist') + ' — ' + g.videos.length + (g.videos.length === 1 ? ' vídeo' : ' vídeos');
-    const lista = document.createElement('div');
-    lista.className = 'sel-lista';
-    g.videos.forEach(v => {
-      const lab = document.createElement('label');
-      lab.className = 'sel-item';
-      const cb = document.createElement('input');
-      cb.type = 'checkbox'; cb.dataset.k = gi + '|' + v.video_id;
-      const tx = document.createElement('span');
-      tx.textContent = v.title || v.video_id;   // textContent: título nunca vira HTML
-      lab.append(cb, tx);
-      lista.appendChild(lab);
-    });
-    sec.append(h, lista);
-    painel.appendChild(sec);
-  });
-
-  const rodape = document.createElement('div');
-  rodape.className = 'sel-rodape';
-  rodape.innerHTML =
-    '<button type="button" class="btn primary" id="sel-go">Transcrever selecionados</button>' +
-    '<button type="button" class="btn" id="sel-cancelar">Cancelar</button>' +
-    (avulsos ? '<span class="sel-nota">+ ' + avulsos + (avulsos === 1 ? ' vídeo avulso' : ' vídeos avulsos') +
-      ' será transcrito também</span>' : '');
-  painel.appendChild(rodape);
-
-  const caixas = () => [...painel.querySelectorAll('input[data-k]')];
-  const visiveis = () => caixas().filter(cb => !cb.parentElement.hidden);
-  const marcadas = () => caixas().filter(cb => cb.checked);
-
-  // Contador e botão de confirmar acompanham as caixas.
-  function atualizar() {
-    const n = marcadas().length;
-    $('sel-cont').textContent = n + ' de ' + caixas().length + ' selecionados';
-    $('sel-go').textContent = 'Transcrever selecionados (' + (n + avulsos) + ')';
-    $('sel-go').disabled = (n + avulsos) === 0;
-  }
-
-  painel.addEventListener('change', atualizar);
-
-  // "Marcar todos" vale para o que está VISÍVEL: filtre por um termo e marque só esses.
-  barra.addEventListener('click', (e) => {
-    const b = e.target.closest('button'); if (!b) return;
-    visiveis().forEach(cb => { cb.checked = b.dataset.a === 'todos'; });
-    atualizar();
-  });
-
-  barra.querySelector('.sel-busca').addEventListener('input', (e) => {
-    const termo = e.target.value.trim().toLowerCase();
-    caixas().forEach(cb => {
-      cb.parentElement.hidden = termo && !cb.nextSibling.textContent.toLowerCase().includes(termo);
-    });
-  });
-
-  $('sel-cancelar').onclick = () => {
-    painel.hidden = true; painel.innerHTML = ''; statusEl.textContent = '';
-    if (!results.children.length) $('empty').style.display = '';
-  };
-  $('sel-go').onclick = () => {
-    const escolhidos = new Set(marcadas().map(cb => cb.dataset.k));
-    painel.hidden = true; painel.innerHTML = '';
-    transcrever(montarJobs(grupos, escolhidos));
-  };
-
-  atualizar();
-}
-
-// Etapa final: transcreve a fila, um vídeo por vez.
-async function transcrever(jobs) {
-  ocupado(true);
-  const wh = $('wh') && $('wh').checked ? $('whmodel').value : null;
-
-  for (let i = 0; i < jobs.length; i++) {
-    statusEl.innerHTML = 'buscando legenda <b>' + (i + 1) + '/' + jobs.length + '</b> — ' +
-      esc((jobs[i].title || jobs[i].url).slice(0, 60)) +
-      (wh ? '<br>sem legenda, o Whisper assume — acompanhe o andamento no terminal' : '');
-    try {
-      const res = await fetch('/api/transcript', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({url: jobs[i].url, langs: langsFor(lang), folder: jobs[i].folder,
-          timestamps: $('ts').checked, cookies: $('cookies').value, whisper: wh})
-      });
-      const data = await res.json();
-      renderCard(data);
-      if (data.ok) done.push(data);
-      renderBulk();
-    } catch (err) {
-      renderCard({ok: false, error: 'O servidor local não respondeu. Confira o terminal onde o app.py está rodando.'});
-    }
-  }
-
-  $('go').disabled = false;
-  $('scan').classList.remove('on');
-  $('badge').classList.remove('live');
-  statusEl.innerHTML = done.length
-    ? '<b>' + done.length + '</b> de <b>' + jobs.length + '</b> pronto' + (done.length > 1 ? 's' : '') + ' — salvos em transcripts/'
-    : 'nenhuma legenda encontrada';
-  if (!results.children.length) $('empty').style.display = '';
-}
-</script>
-</body>
-</html>
-"""
+INTERFACE_DIR = Path(__file__).parent / "interface"
+
+
+def carregar_pagina() -> str:
+    """Monta a página: o HTML-modelo com o CSS e o JavaScript embutidos.
+
+    Os três arquivos ficam em interface/. O resultado é um documento único, então o
+    servidor não precisa de rotas para arquivos estáticos. Lido a cada acesso: editar
+    o CSS e recarregar o navegador já mostra a mudança, sem reiniciar o app.
+    """
+    html = (INTERFACE_DIR / "pagina.html").read_text(encoding="utf-8")
+    css = (INTERFACE_DIR / "estilo.css").read_text(encoding="utf-8")
+    js = (INTERFACE_DIR / "app.js").read_text(encoding="utf-8")
+    return html.replace("<!--ESTILO-->", css).replace("<!--SCRIPT-->", js)
 
 
 # --------------------------------------------------------------------------- #
@@ -1141,7 +428,7 @@ class Handler(BaseHTTPRequestHandler):
                          '(não encontrado)</option>')
 
             html = (
-                PAGE.replace("<!--AVISO-->", aviso)
+                carregar_pagina().replace("<!--AVISO-->", aviso)
                 .replace("<!--COOKIES_ARQUIVO-->", opcao)
                 .replace("<!--WHISPER-->", bloco_whisper())
             )

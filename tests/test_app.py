@@ -20,6 +20,29 @@ class PlaylistTests(unittest.TestCase):
             app.is_playlist_url("https://www.youtube.com/watch?v=abcdefghijk")
         )
 
+    def test_already_transcribed_ids_are_found_in_any_subfolder(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            raiz = Path(tmp) / "transcripts"
+            (raiz / "minha-playlist").mkdir(parents=True)
+            (raiz / "minha-playlist" / "um-titulo-abcdefghijk.md").write_text("x", encoding="utf-8")
+            (raiz / "avulso-com-hifen--bcdefghijk.md").write_text("x", encoding="utf-8")
+            (raiz / "README.md").write_text("x", encoding="utf-8")
+            antigo = app.TRANSCRIPTS_DIR
+            app.TRANSCRIPTS_DIR = raiz
+            try:
+                feitos = app.ids_ja_transcritos()
+            finally:
+                app.TRANSCRIPTS_DIR = antigo
+        self.assertEqual(feitos, {"abcdefghijk", "-bcdefghijk"})  # ID que começa com "-" também
+
+    def test_already_transcribed_is_empty_when_folder_missing(self):
+        antigo = app.TRANSCRIPTS_DIR
+        app.TRANSCRIPTS_DIR = Path(tempfile.gettempdir()) / "pasta-que-nao-existe-xyz"
+        try:
+            self.assertEqual(app.ids_ja_transcritos(), set())
+        finally:
+            app.TRANSCRIPTS_DIR = antigo
+
     def test_ytdlp_uses_node_when_available(self):
         # sem runtime JS o yt-dlp falha com "Requested format is not available"
         with patch("yt_transcript_md.shutil.which", return_value="C:/node.exe"):
@@ -35,7 +58,7 @@ class PlaylistTests(unittest.TestCase):
 
     def test_watch_later_link_counts_as_playlist(self):
         # o cartão fixo "Assistir mais tarde" da interface usa este link
-        self.assertIn("https://www.youtube.com/playlist?list=WL", app.PAGE)
+        self.assertIn("https://www.youtube.com/playlist?list=WL", app.carregar_pagina())
         self.assertTrue(app.is_playlist_url("https://www.youtube.com/playlist?list=WL"))
 
     def test_video_link_passes_through_without_ytdlp(self):
@@ -117,6 +140,25 @@ class PlaylistTests(unittest.TestCase):
 
 
 class OutputTests(unittest.TestCase):
+    @patch("app.core.fetch_via_api")
+    @patch("app.core.fetch_metadata")
+    def test_video_without_playlist_goes_to_avulsos_subfolder(self, metadata, fetch):
+        metadata.return_value = {"title": "Vídeo Solto", "channel": "Canal", "channel_url": ""}
+        fetch.return_value = ([{"start": 0.0, "duration": 1.0, "text": "Texto."}], "pt", None)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            antigo = app.TRANSCRIPTS_DIR
+            app.TRANSCRIPTS_DIR = Path(tmp) / "transcripts"
+            try:
+                result = app.transcribe("abcdefghijk", ["pt"], True)  # sem folder
+            finally:
+                app.TRANSCRIPTS_DIR = antigo
+
+            salvo = Path(result["saved_path"]).resolve()
+            esperado = (Path(tmp) / "transcripts" / app.PASTA_AVULSOS).resolve()
+            self.assertEqual(salvo.parent, esperado)
+            self.assertEqual(result["saved_folder"], app.PASTA_AVULSOS)
+
     @patch("app.core.fetch_via_api")
     @patch("app.core.fetch_metadata")
     def test_playlist_folder_cannot_escape_transcripts(self, metadata, fetch):

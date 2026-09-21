@@ -5,6 +5,48 @@ Todas as mudanças relevantes deste projeto. Formato baseado em
 
 ## [Não publicado]
 
+### Alterado — novo visual, com tema claro e escuro (21/09/2026)
+
+- **Interface refeita** para um visual mais limpo e fluido: campo de links em destaque
+  com o botão principal dentro dele, idioma como controle segmentado, opções
+  secundárias recolhidas em **Opções**, playlists como cartões com ícone e marca de
+  seleção, e barra de progresso fina na borda do campo (indeterminada ao ler links,
+  proporcional ao andar da fila).
+- **Tema claro e escuro** com um botão só, no padrão de fade linear (View Transitions
+  API; sem ela, `transition` em `html` e `body`). A escolha fica salva no navegador e o
+  primeiro acesso segue o tema do sistema. Um script no `<head>` aplica o tema antes da
+  primeira pintura, para a página não piscar no tema errado.
+- **Contraste conferido por cálculo (WCAG), nos dois temas.** Um par falhou na primeira
+  versão (botão principal no escuro, 4,47:1) e o tom do acento foi ajustado para 5,0:1.
+  Contornos de caixa de marcar e de chave usam um token próprio (`--borda-forte`) porque
+  contorno de controle exige 3:1, e o token de linha decorativa não chega nisso.
+- **Sem cápsulas nem selos:** o selo "CC" foi removido; "já transcrito", contagens e
+  status são texto, com cor e ícone.
+- **Página tirada de dentro do `app.py`** para a pasta `interface/` (`pagina.html`,
+  `estilo.css`, `app.js`), com README próprio. Eram 750 linhas de HTML/CSS/JS dentro de
+  um texto do Python. O servidor monta o documento a cada acesso, então editar e
+  recarregar o navegador basta. O `app.py` encolheu de ~1.300 para ~550 linhas.
+- **Alinhamento:** as playlists ficavam 2 px para dentro do cartão "Assistir mais tarde"
+  (efeito do `padding` da lista rolável). Corrigido com margem negativa compensando o
+  padding, que continua existindo para a sombra do hover não ser cortada.
+
+### Adicionado — pausa entre vídeos e "já transcrito" (21/09/2026)
+
+- **Pausa entre vídeos da fila**, em **Opções** (nenhuma, 3, 6, 10 ou 20 s; padrão 6 s),
+  com variação de ±30% para o ritmo não ser de robô. Reduz o risco de HTTP 429 / IpBlocked
+  ao transcrever muitos vídeos seguidos. A tela mostra a contagem enquanto espera.
+- **"Já transcrito"** na lista de vídeos de uma playlist: o servidor procura o ID do
+  vídeo (últimos 11 caracteres do nome do arquivo) em **todas** as pastas de
+  `transcripts/`, então um vídeo feito por outra playlist ou como link avulso também
+  conta. **Marcar todos** pula esses; dá para marcá-los à mão para refazer.
+
+### Alterado — vídeos avulsos vão para `transcripts/avulsos/` (21/09/2026)
+
+- Antes, o vídeo colado como link direto era salvo solto na raiz de `transcripts/`, ao
+  lado das pastas das playlists. Agora vai para a subpasta `avulsos/` (constante
+  `PASTA_AVULSOS` no `app.py`). Arquivos antigos na raiz continuam valendo: o
+  "já transcrito" os reconhece. A CLI não foi alterada.
+
 ### Adicionado — escolher os vídeos antes de transcrever (21/09/2026)
 
 - **Sintoma que motivou:** a "Assistir mais tarde" tem 280 vídeos e o app transcrevia a

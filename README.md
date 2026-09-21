@@ -10,7 +10,8 @@ e marcações de tempo clicáveis.
 - Uma subpasta própria em `transcripts/` para cada playlist.
 - Legendas públicas via `youtube-transcript-api` e `yt-dlp`.
 - Transcrição de áudio sem legenda com Whisper, opcional e executado localmente.
-- Preferência de idioma, timestamps, cookies de sessão e processamento em fila.
+- Preferência de idioma, timestamps, cookies de sessão e processamento em fila com pausa.
+- Tema claro e escuro (botão no canto superior direito).
 - CLI para vídeos individuais e listas de URLs.
 
 ## Requisitos
@@ -58,15 +59,24 @@ O navegador abre em [http://127.0.0.1:7860](http://127.0.0.1:7860).
    que quiser (ou **Marcar todos**), use o campo de filtro para achar por título e clique
    em **Transcrever selecionados**. Vídeo avulso é transcrito direto.
 
-Vídeos avulsos são gravados diretamente em `transcripts/`. Para playlists, o app
-cria uma pasta no formato:
+Vídeos colados como link direto vão para `transcripts/avulsos/`. Cada playlist ganha
+uma pasta própria:
 
 ```text
 transcripts/
+├── avulsos/
+│   └── titulo-do-video-ID.md
 └── titulo-da-playlist-PLxxxx/
     ├── primeiro-video-ID.md
     └── segundo-video-ID.md
 ```
+
+Ao ler uma playlist, o app marca como "já transcrito" os vídeos que já têm arquivo em
+qualquer pasta de `transcripts/`, e o botão **Marcar todos** pula esses. Por isso, não
+renomeie o final do nome dos arquivos (o ID do vídeo).
+
+Entre um vídeo e outro da fila há uma **pausa** (padrão de 6 s, ajustável em
+**Opções**) para o YouTube não bloquear o seu IP em filas grandes.
 
 ## Uso pela linha de comando
 
@@ -147,7 +157,8 @@ confiável.
 
 | Arquivo | Finalidade |
 |---|---|
-| `app.py` | Servidor local e interface web. |
+| `app.py` | Servidor local (rotas e transcrição). |
+| `interface/` | Página web: HTML, CSS e JavaScript em arquivos separados. |
 | `yt_transcript_md.py` | Extração, conversão para Markdown e CLI. |
 | `youtube_conta.py` | Login com Google e listagem das playlists da conta. |
 | `transcricao_audio.py` | Fallback opcional com Whisper. |
