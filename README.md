@@ -146,6 +146,23 @@ casos, exporte a sessão do YouTube no formato Netscape como `cookies.txt`, colo
 o arquivo na raiz do projeto e selecione **arquivo cookies.txt** na interface (em
 **Opções**; ele já vem selecionado quando o arquivo está na pasta).
 
+### Como exportar o cookies.txt sem que o YouTube o invalide
+
+O YouTube troca ("rotaciona") os cookies de uma janela que continua aberta, então um
+arquivo exportado da sua navegação normal pode nascer inválido ou incompleto. Sintoma
+típico: a "Assistir mais tarde" responde *"The playlist does not exist"*. O jeito
+recomendado pelo `yt-dlp`:
+
+1. Abra uma **janela anônima** e libere a extensão *Get cookies.txt LOCALLY* nela.
+2. Entre no youtube.com com a sua conta.
+3. Na **mesma aba**, abra `https://www.youtube.com/robots.txt` (não dispara a rotação).
+4. Exporte com a extensão.
+5. **Feche a janela anônima** sem navegar mais.
+6. Salve por cima de `www.youtube.com_cookies.txt`, na pasta do app.
+
+Um arquivo bom de uma conta logada traz, entre outros, `LOGIN_INFO`, `SID`, `HSID`,
+`SSID`, `SAPISID` e `__Secure-1PSID`. Se faltarem, exporte de novo.
+
 > **Segurança:** `cookies.txt` dá acesso à sua sessão. Nunca publique, envie ou
 > versione esse arquivo. O `.gitignore` deste projeto bloqueia nomes comuns de
 > arquivos de cookies.

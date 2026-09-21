@@ -43,6 +43,31 @@ class PlaylistTests(unittest.TestCase):
         finally:
             app.TRANSCRIPTS_DIR = antigo
 
+    @patch("app.subprocess.run")
+    def test_private_playlist_with_cookies_asks_for_new_export(self, run):
+        run.return_value = subprocess.CompletedProcess(
+            args=[], returncode=1, stdout="",
+            stderr="ERROR: [youtube:tab] WL: YouTube said: The playlist does not exist.",
+        )
+        with patch("app.cookies_txt_disponivel", return_value=Path("cookies.txt")):
+            result = app.expand_target("https://www.youtube.com/playlist?list=WL", cookies="arquivo")
+
+        self.assertFalse(result["ok"])
+        self.assertIn("robots.txt", result["detalhes"][0])
+        self.assertIn("sessão", result["detalhes"][0])
+
+    @patch("app.subprocess.run")
+    def test_private_playlist_without_cookies_points_to_cookies_option(self, run):
+        run.return_value = subprocess.CompletedProcess(
+            args=[], returncode=1, stdout="",
+            stderr="ERROR: [youtube:tab] WL: YouTube said: The playlist does not exist.",
+        )
+        result = app.expand_target("https://www.youtube.com/playlist?list=WL", cookies=None)
+
+        self.assertFalse(result["ok"])
+        self.assertIn("cookies.txt", result["detalhes"][0])
+        self.assertNotIn("robots.txt", result["detalhes"][0])
+
     def test_block_detection_recognizes_ip_block_and_429(self):
         self.assertTrue(app.foi_bloqueio(["youtube-transcript-api → IpBlocked: o YouTube bloqueou"]))
         self.assertTrue(app.foi_bloqueio(["yt-dlp → ERROR: HTTP Error 429: Too Many Requests"]))

@@ -51,8 +51,9 @@ PASTA_AVULSOS = "avulsos"
 # with DPAPI"). O caminho que ainda funciona é exportar um cookies.txt à mão.
 DICA_COOKIES = (
     "Se você vê a transcrição no YouTube logado: instale a extensão "
-    "\"Get cookies.txt LOCALLY\", abra o youtube.com logado, exporte o cookies.txt, "
-    "salve na pasta do app e escolha \"arquivo cookies.txt\" em COOKIES. "
+    "\"Get cookies.txt LOCALLY\", entre no youtube.com em uma janela anônima, abra "
+    "youtube.com/robots.txt na mesma aba, exporte o cookies.txt e feche a janela. "
+    "Salve na pasta do app e escolha \"arquivo cookies.txt\" em Opções. "
     "No Windows, ler cookies direto do Chrome/Edge não funciona mais."
 )
 

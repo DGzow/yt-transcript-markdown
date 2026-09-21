@@ -370,6 +370,16 @@ def _erro_ytdlp(proc, tem_cookies: bool) -> str:
                 "Chrome 127 eles vêm criptografados). Exporte um cookies.txt com a extensão "
                 "\"Get cookies.txt LOCALLY\", salve na pasta do app e escolha "
                 "\"arquivo cookies.txt\" em COOKIES.")
+    if "playlist does not exist" in baixo or "this playlist is private" in baixo:
+        # Lista privada (ex.: Assistir mais tarde) sem sessão válida: o YouTube diz que
+        # "não existe" em vez de pedir login.
+        if tem_cookies:
+            return ("o YouTube não reconheceu a sua sessão e tratou a lista privada como "
+                    "inexistente. O cookies.txt provavelmente está incompleto ou vencido. "
+                    "Exporte de novo: abra uma janela anônima, entre no youtube.com, abra "
+                    "youtube.com/robots.txt na mesma aba, exporte e feche a janela.")
+        return ("a lista é privada ou não existe. Para listas privadas, como a Assistir mais "
+                "tarde, escolha \"arquivo cookies.txt\" em Opções (sessão logada).")
     if "could not find" in baixo and "cookies database" in baixo:
         return "não achei os cookies desse navegador nesta máquina — escolha outro ou use um cookies.txt."
     if "confirm your age" in baixo or "age-restricted" in baixo or "inappropriate" in baixo:

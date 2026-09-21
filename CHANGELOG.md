@@ -5,6 +5,21 @@ Todas as mudanças relevantes deste projeto. Formato baseado em
 
 ## [Não publicado]
 
+### Alterado — mensagem clara para lista privada sem sessão válida (21/09/2026)
+
+- **Sintoma:** a "Assistir mais tarde" falhava com `ERROR: [youtube:tab] WL: YouTube said:
+  The playlist does not exist.`, texto que não diz o que fazer. Hoje cedo a mesma lista abriu
+  com 280 vídeos; depois de uma nova exportação do `cookies.txt` passou a falhar.
+- **Causa investigada:** o arquivo regravado tinha 12 cookies e não trazia `LOGIN_INFO`, `SID`,
+  `HSID`, `SSID`, `SAPISID`, `__Secure-1PSID` nem `__Secure-1PAPISID`. Sem eles o YouTube trata
+  a requisição como deslogada e responde que a lista privada "não existe". Causa provável: o
+  YouTube rotaciona os cookies da janela que continua aberta. Só os NOMES foram inspecionados;
+  nenhum valor foi lido.
+- `_erro_ytdlp` reconhece "playlist does not exist" e "this playlist is private". Com cookies,
+  manda exportar de novo (janela anônima, `robots.txt`, fechar a janela). Sem cookies, manda
+  escolher "arquivo cookies.txt" em Opções.
+- `DICA_COOKIES` e o README passaram a descrever esse jeito de exportar.
+
 ### Corrigido — cookies e mensagens de bloqueio enganosas (21/09/2026)
 
 - **Sintoma:** um vídeo falhou com `IpBlocked` e, na linha do `yt-dlp`, a mensagem de que o
