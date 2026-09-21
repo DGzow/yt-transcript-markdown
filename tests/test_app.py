@@ -20,6 +20,11 @@ class PlaylistTests(unittest.TestCase):
             app.is_playlist_url("https://www.youtube.com/watch?v=abcdefghijk")
         )
 
+    def test_watch_later_link_counts_as_playlist(self):
+        # o cartão fixo "Assistir mais tarde" da interface usa este link
+        self.assertIn("https://www.youtube.com/playlist?list=WL", app.PAGE)
+        self.assertTrue(app.is_playlist_url("https://www.youtube.com/playlist?list=WL"))
+
     def test_video_link_passes_through_without_ytdlp(self):
         result = app.expand_target("https://youtu.be/abcdefghijk")
 

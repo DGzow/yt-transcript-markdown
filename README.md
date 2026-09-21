@@ -109,7 +109,9 @@ Depois, clique em **Entrar com Google** na interface. O login fica salvo em `tok
 Com o app do Google Cloud em modo **Teste**, o login vale por 7 dias e depois pede nova
 entrada. Publicar o app (aparece um aviso de "app não verificado", normal para uso
 pessoal) remove esse prazo. "Assistir mais tarde" e "Curtidas" não aparecem na lista, por
-limitação da API; para elas, use o `cookies.txt`.
+limitação da API. Para a "Assistir mais tarde" existe um cartão fixo no mesmo bloco: ele
+preenche o link e escolhe o `cookies.txt` por você (o arquivo precisa estar na pasta do
+app, veja "Vídeos que exigem login" abaixo).
 
 ## Como a transcrição é obtida
 

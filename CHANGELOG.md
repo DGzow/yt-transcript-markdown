@@ -5,6 +5,17 @@ Todas as mudanças relevantes deste projeto. Formato baseado em
 
 ## [Não publicado]
 
+### Adicionado — cartão "Assistir mais tarde" (21/09/2026)
+
+- Cartão fixo no bloco **Minha conta** que liga/desliga o link
+  `youtube.com/playlist?list=WL` no campo de links e já seleciona **arquivo cookies.txt**
+  no seletor de cookies. Se o `cookies.txt` não estiver na pasta, mostra um aviso.
+- **Por que fixo e fora da lista da conta:** a YouTube Data API não entrega a "Assistir
+  mais tarde" (o Google a esconde dos apps desde 2016), então ela nunca viria da lista
+  do login. O caminho que funciona é o `yt-dlp` com `cookies.txt`, e esse não depende do
+  login Google, por isso o cartão aparece mesmo desconectado.
+- A função de clique foi generalizada (`alternarLink`) e atende os dois grupos de cartões.
+
 ### Adicionado — login com Google e lista das minhas playlists (21/09/2026)
 
 - **`youtube_conta.py`**: login OAuth com a conta Google e listagem das playlists pela

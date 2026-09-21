@@ -656,6 +656,14 @@ PAGE = r"""<!doctype html>
       <button class="btn" id="conta-entrar" hidden>Entrar com Google</button>
       <button class="btn" id="conta-sair" hidden>Sair</button>
     </div>
+    <!-- Listas que a API do Google não entrega: só o cookies.txt alcança. Ficam sempre visíveis. -->
+    <div class="playlists" id="fixas" role="group" aria-label="Listas que usam cookies">
+      <button type="button" data-url="https://www.youtube.com/playlist?list=WL"
+        data-cookies="1" aria-pressed="false">
+        <span class="pl-titulo">Assistir mais tarde</span>
+        <span class="pl-info">usa o cookies.txt</span>
+      </button>
+    </div>
     <div class="playlists" id="playlists" role="group" aria-label="Minhas playlists"></div>
   </section>
 
@@ -749,8 +757,9 @@ async function playlistsCarregar() {
   }
 }
 
-// Clicar numa playlist liga/desliga o link dela no campo de texto (uma playlist por linha).
-$('playlists').addEventListener('click', (e) => {
+// Clicar num cartão liga/desliga o link dele no campo de texto (um link por linha).
+// Serve tanto para as playlists da conta quanto para os cartões fixos (#fixas).
+function alternarLink(e) {
   const b = e.target.closest('button'); if (!b) return;
   const linhas = box.value.split('\n').map(s => s.trim()).filter(Boolean);
   const ligada = linhas.includes(b.dataset.url);
@@ -758,7 +767,16 @@ $('playlists').addEventListener('click', (e) => {
   box.value = novas.join('\n');
   b.setAttribute('aria-pressed', String(!ligada));
   grow();
-});
+
+  // Cartão que depende do cookies.txt: já deixa o seletor de cookies pronto.
+  if (b.dataset.cookies && !ligada) {
+    const opcao = [...$('cookies').options].find(o => o.value === 'arquivo');
+    if (opcao && !opcao.disabled) $('cookies').value = 'arquivo';
+    else toast('Falta o cookies.txt na pasta do app (veja o README)');
+  }
+}
+$('playlists').addEventListener('click', alternarLink);
+$('fixas').addEventListener('click', alternarLink);
 
 btnEntrar.addEventListener('click', async () => {
   btnEntrar.disabled = true;
