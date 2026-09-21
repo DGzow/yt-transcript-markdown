@@ -583,6 +583,31 @@ PAGE = r"""<!doctype html>
   .playlists .pl-info{font-family:'DM Mono',monospace;font-size:11.5px;color:var(--muted)}
   .playlists button[aria-pressed="true"] .pl-info{color:var(--cc-yellow)}
 
+  /* escolha dos vídeos de uma playlist antes de transcrever */
+  .seletor{
+    margin-top:20px;background:var(--surface);border:1px solid var(--line);
+    border-radius:var(--radius);padding:16px;
+  }
+  .sel-barra{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .sel-busca{
+    flex:1;min-width:180px;font:inherit;font-size:14px;padding:8px 10px;
+    border:1px solid var(--line);border-radius:var(--radius);color:var(--ink);background:var(--surface);
+  }
+  .sel-busca:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+  .sel-cont{margin-left:auto;font-family:'DM Mono',monospace;font-size:12px;color:var(--muted)}
+  .sel-grupo h3{font-family:'Archivo',sans-serif;font-weight:600;font-size:15px;margin:16px 0 6px}
+  .sel-lista{max-height:420px;overflow-y:auto;border:1px solid var(--line);border-radius:var(--radius)}
+  .sel-item{
+    display:flex;gap:10px;align-items:flex-start;padding:8px 12px;cursor:pointer;
+    font-size:14px;border-bottom:1px solid var(--line);
+  }
+  .sel-item:last-child{border-bottom:0}
+  .sel-item:hover{background:var(--paper)}
+  .sel-item input{margin-top:3px;accent-color:var(--ink)}
+  .sel-rodape{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:14px}
+  .sel-rodape .btn.primary:disabled{opacity:.45;cursor:not-allowed}
+  .sel-nota{font-size:13px;color:var(--muted)}
+
   .toast{
     position:fixed;bottom:26px;left:50%;transform:translateX(-50%) translateY(80px);
     background:var(--ink);color:var(--cc-yellow);
@@ -668,6 +693,7 @@ PAGE = r"""<!doctype html>
   </section>
 
   <p id="status"></p>
+  <div class="seletor" id="seletor" hidden></div>
   <div class="bulk" id="bulk"></div>
   <div class="results" id="results"></div>
 
@@ -893,16 +919,13 @@ async function run() {
   const inputs = box.value.split('\n').map(s => s.trim()).filter(Boolean);
   if (!inputs.length) { box.focus(); toast('Cole um link primeiro'); return; }
 
-  $('go').disabled = true;
-  $('scan').classList.add('on');
-  $('badge').classList.add('live');
+  ocupado(true);
   $('empty').style.display = 'none';
+  $('seletor').hidden = true; $('seletor').innerHTML = '';
   results.innerHTML = ''; done = []; renderBulk();
 
-  const wh = $('wh') && $('wh').checked ? $('whmodel').value : null;
-
-  // Expande cada playlist antes de começar, para mostrar o total real de vídeos.
-  const jobs = [], seen = new Set();
+  // Etapa 1: ler cada link. Playlist vira uma lista de vídeos; vídeo avulso passa direto.
+  const grupos = [];
   for (let i = 0; i < inputs.length; i++) {
     statusEl.innerHTML = 'lendo link <b>' + (i + 1) + '/' + inputs.length + '</b> — ' +
       esc(inputs[i].slice(0, 60));
@@ -913,23 +936,138 @@ async function run() {
       });
       const expanded = await res.json();
       if (!expanded.ok) { renderCard(expanded); continue; }
-      for (const video of expanded.videos) {
-        const key = video.video_id + '|' + (expanded.folder || '');
-        if (seen.has(key)) continue;
-        seen.add(key);
-        jobs.push({url: video.url, video_id: video.video_id, title: video.title,
-          folder: expanded.folder, playlist_title: expanded.title});
-      }
+      grupos.push(expanded);
     } catch (err) {
       renderCard({ok: false, error: 'O servidor local não respondeu ao ler a playlist.'});
     }
   }
 
-  if (!jobs.length) {
-    $('go').disabled = false;
-    $('scan').classList.remove('on'); $('badge').classList.remove('live');
-    statusEl.textContent = 'nenhum vídeo encontrado'; return;
+  ocupado(false);
+  if (!grupos.some(g => g.videos.length)) {
+    statusEl.textContent = 'nenhum vídeo encontrado';
+    if (!results.children.length) $('empty').style.display = '';
+    return;
   }
+
+  // Só vídeos avulsos: segue direto. Havendo playlist, para aqui para você escolher.
+  if (!grupos.some(g => g.is_playlist)) return transcrever(montarJobs(grupos));
+  mostrarSeletor(grupos);
+}
+
+// Liga/desliga o "ocupado": botão travado, faixa de varredura e selo CC animados.
+function ocupado(on) {
+  $('go').disabled = on;
+  $('scan').classList.toggle('on', on);
+  $('badge').classList.toggle('live', on);
+}
+
+// Transforma os grupos em fila de trabalho. `marcados` é o conjunto de vídeos escolhidos
+// nas playlists (chave "índice do grupo|id do vídeo"); vídeo avulso entra sempre.
+function montarJobs(grupos, marcados) {
+  const jobs = [], seen = new Set();
+  grupos.forEach((g, gi) => g.videos.forEach(v => {
+    if (g.is_playlist && marcados && !marcados.has(gi + '|' + v.video_id)) return;
+    const key = v.video_id + '|' + (g.folder || '');
+    if (seen.has(key)) return;   // mesmo vídeo repetido na mesma pasta
+    seen.add(key);
+    jobs.push({url: v.url, video_id: v.video_id, title: v.title,
+      folder: g.folder, playlist_title: g.title});
+  }));
+  return jobs;
+}
+
+// Etapa 2 (intermediária): lista os vídeos de cada playlist com caixas de marcar.
+function mostrarSeletor(grupos) {
+  const painel = $('seletor');
+  painel.innerHTML = ''; painel.hidden = false;
+  statusEl.innerHTML = 'escolha quais vídeos transcrever';
+  const avulsos = grupos.filter(g => !g.is_playlist).reduce((n, g) => n + g.videos.length, 0);
+
+  const barra = document.createElement('div');
+  barra.className = 'sel-barra';
+  barra.innerHTML =
+    '<input type="search" class="sel-busca" placeholder="Filtrar por título..." aria-label="Filtrar vídeos">' +
+    '<button type="button" class="btn" data-a="todos">Marcar todos</button>' +
+    '<button type="button" class="btn" data-a="nenhum">Desmarcar todos</button>' +
+    '<span class="sel-cont" id="sel-cont"></span>';
+  painel.appendChild(barra);
+
+  grupos.forEach((g, gi) => {
+    if (!g.is_playlist) return;
+    const sec = document.createElement('section');
+    sec.className = 'sel-grupo';
+    const h = document.createElement('h3');
+    h.textContent = (g.title || 'Playlist') + ' — ' + g.videos.length + (g.videos.length === 1 ? ' vídeo' : ' vídeos');
+    const lista = document.createElement('div');
+    lista.className = 'sel-lista';
+    g.videos.forEach(v => {
+      const lab = document.createElement('label');
+      lab.className = 'sel-item';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox'; cb.dataset.k = gi + '|' + v.video_id;
+      const tx = document.createElement('span');
+      tx.textContent = v.title || v.video_id;   // textContent: título nunca vira HTML
+      lab.append(cb, tx);
+      lista.appendChild(lab);
+    });
+    sec.append(h, lista);
+    painel.appendChild(sec);
+  });
+
+  const rodape = document.createElement('div');
+  rodape.className = 'sel-rodape';
+  rodape.innerHTML =
+    '<button type="button" class="btn primary" id="sel-go">Transcrever selecionados</button>' +
+    '<button type="button" class="btn" id="sel-cancelar">Cancelar</button>' +
+    (avulsos ? '<span class="sel-nota">+ ' + avulsos + (avulsos === 1 ? ' vídeo avulso' : ' vídeos avulsos') +
+      ' será transcrito também</span>' : '');
+  painel.appendChild(rodape);
+
+  const caixas = () => [...painel.querySelectorAll('input[data-k]')];
+  const visiveis = () => caixas().filter(cb => !cb.parentElement.hidden);
+  const marcadas = () => caixas().filter(cb => cb.checked);
+
+  // Contador e botão de confirmar acompanham as caixas.
+  function atualizar() {
+    const n = marcadas().length;
+    $('sel-cont').textContent = n + ' de ' + caixas().length + ' selecionados';
+    $('sel-go').textContent = 'Transcrever selecionados (' + (n + avulsos) + ')';
+    $('sel-go').disabled = (n + avulsos) === 0;
+  }
+
+  painel.addEventListener('change', atualizar);
+
+  // "Marcar todos" vale para o que está VISÍVEL: filtre por um termo e marque só esses.
+  barra.addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    visiveis().forEach(cb => { cb.checked = b.dataset.a === 'todos'; });
+    atualizar();
+  });
+
+  barra.querySelector('.sel-busca').addEventListener('input', (e) => {
+    const termo = e.target.value.trim().toLowerCase();
+    caixas().forEach(cb => {
+      cb.parentElement.hidden = termo && !cb.nextSibling.textContent.toLowerCase().includes(termo);
+    });
+  });
+
+  $('sel-cancelar').onclick = () => {
+    painel.hidden = true; painel.innerHTML = ''; statusEl.textContent = '';
+    if (!results.children.length) $('empty').style.display = '';
+  };
+  $('sel-go').onclick = () => {
+    const escolhidos = new Set(marcadas().map(cb => cb.dataset.k));
+    painel.hidden = true; painel.innerHTML = '';
+    transcrever(montarJobs(grupos, escolhidos));
+  };
+
+  atualizar();
+}
+
+// Etapa final: transcreve a fila, um vídeo por vez.
+async function transcrever(jobs) {
+  ocupado(true);
+  const wh = $('wh') && $('wh').checked ? $('whmodel').value : null;
 
   for (let i = 0; i < jobs.length; i++) {
     statusEl.innerHTML = 'buscando legenda <b>' + (i + 1) + '/' + jobs.length + '</b> — ' +

@@ -54,6 +54,9 @@ O navegador abre em [http://127.0.0.1:7860](http://127.0.0.1:7860).
 1. Cole o link de um vídeo ou playlist.
 2. Escolha idioma, timestamps e, se necessário, cookies ou Whisper.
 3. Clique em **Gerar Markdown**.
+4. Se o link for de **playlist**, o app lista os vídeos antes de transcrever. Marque os
+   que quiser (ou **Marcar todos**), use o campo de filtro para achar por título e clique
+   em **Transcrever selecionados**. Vídeo avulso é transcrito direto.
 
 Vídeos avulsos são gravados diretamente em `transcripts/`. Para playlists, o app
 cria uma pasta no formato:

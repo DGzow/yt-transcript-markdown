@@ -5,6 +5,25 @@ Todas as mudanças relevantes deste projeto. Formato baseado em
 
 ## [Não publicado]
 
+### Adicionado — escolher os vídeos antes de transcrever (21/09/2026)
+
+- **Sintoma que motivou:** a "Assistir mais tarde" tem 280 vídeos e o app transcrevia a
+  playlist inteira sem perguntar.
+- Depois de ler um link de playlist, o app mostra a **lista de vídeos com caixas de
+  marcar**, começando tudo desmarcado. Botões **Marcar todos** e **Desmarcar todos**,
+  contador ("12 de 280 selecionados") e botão "Transcrever selecionados (N)".
+- **Campo de filtro por título.** "Marcar todos" age só sobre o que está visível, então
+  dá para filtrar um assunto e marcar só esses. Com centenas de vídeos, ir marcando um a
+  um seria inviável.
+- **Vídeo avulso continua indo direto,** sem tela extra. Misturando links, os avulsos
+  entram sempre e a tela avisa quantos são.
+- **Cancelar** volta ao estado inicial sem transcrever nada.
+- **Como foi feito:** `run()` do JavaScript foi dividido em etapas. `run()` lê os
+  links, `mostrarSeletor()` cuida da escolha e `transcrever()` roda a fila. `montarJobs()`
+  monta a fila a partir do que foi marcado. Títulos entram com `textContent`, nunca como
+  HTML, para um título de vídeo com `<` não quebrar a página.
+- Nenhuma rota nova: o servidor já devolvia a lista de vídeos em `/api/expand`.
+
 ### Corrigido — "Requested format is not available" ao buscar legenda (21/09/2026)
 
 - **Sintoma:** vídeo com legenda automática falhava com `yt-dlp → ERROR: Requested format
