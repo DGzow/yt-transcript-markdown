@@ -143,7 +143,8 @@ principalmente em CPU, e baixa o modelo no primeiro uso.
 
 Alguns vídeos ou playlists só ficam disponíveis em uma conta autenticada. Nesses
 casos, exporte a sessão do YouTube no formato Netscape como `cookies.txt`, coloque
-o arquivo na raiz do projeto e selecione **arquivo cookies.txt** na interface.
+o arquivo na raiz do projeto e selecione **arquivo cookies.txt** na interface (em
+**Opções**; ele já vem selecionado quando o arquivo está na pasta).
 
 > **Segurança:** `cookies.txt` dá acesso à sua sessão. Nunca publique, envie ou
 > versione esse arquivo. O `.gitignore` deste projeto bloqueia nomes comuns de

@@ -184,6 +184,8 @@ h1{font-size:clamp(24px,4.2vw,32px);line-height:1.15;font-weight:650;letter-spac
 }
 .opcoes summary::-webkit-details-marker{display:none}
 .opcoes summary:hover{background:var(--hover);color:var(--fg)}
+.opcoes-resumo{font-size:13px;font-weight:400;color:var(--muted)}
+.opcoes-resumo.alerta{color:var(--danger);font-weight:500}
 .opcoes summary .seta{transition:transform .2s}
 .opcoes[open] summary .seta{transform:rotate(180deg)}
 .opcoes-grade{

@@ -43,6 +43,24 @@ class PlaylistTests(unittest.TestCase):
         finally:
             app.TRANSCRIPTS_DIR = antigo
 
+    def test_block_detection_recognizes_ip_block_and_429(self):
+        self.assertTrue(app.foi_bloqueio(["youtube-transcript-api → IpBlocked: o YouTube bloqueou"]))
+        self.assertTrue(app.foi_bloqueio(["yt-dlp → ERROR: HTTP Error 429: Too Many Requests"]))
+
+    def test_block_detection_ignores_other_failures(self):
+        self.assertFalse(app.foi_bloqueio(["yt-dlp → este vídeo não publica nenhuma faixa de legenda"]))
+        self.assertFalse(app.foi_bloqueio(["arquivo com 1429 palavras"]))  # 429 dentro de outro número
+
+    def test_cookies_txt_option_is_preselected_when_file_exists(self):
+        with patch("app.cookies_txt_disponivel", return_value=Path("cookies.txt")):
+            self.assertIn(" selected", app.html_opcao_cookies())
+
+    def test_cookies_txt_option_is_disabled_when_file_missing(self):
+        with patch("app.cookies_txt_disponivel", return_value=None):
+            html = app.html_opcao_cookies()
+        self.assertIn("disabled", html)
+        self.assertNotIn(" selected", html)
+
     def test_ytdlp_uses_node_when_available(self):
         # sem runtime JS o yt-dlp falha com "Requested format is not available"
         with patch("yt_transcript_md.shutil.which", return_value="C:/node.exe"):

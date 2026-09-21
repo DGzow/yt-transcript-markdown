@@ -5,6 +5,29 @@ Todas as mudanças relevantes deste projeto. Formato baseado em
 
 ## [Não publicado]
 
+### Corrigido — cookies e mensagens de bloqueio enganosas (21/09/2026)
+
+- **Sintoma:** um vídeo falhou com `IpBlocked` e, na linha do `yt-dlp`, a mensagem de que o
+  Windows não deixa ler os cookies do Chrome/Edge/Brave. Ou seja, a tentativa foi feita com
+  o seletor **Cookies** em um navegador, caminho que nunca funciona no Windows (o navegador
+  criptografa o banco de cookies). O seletor estava dentro de **Opções**, fechado, e não dava
+  para ver o que estava valendo.
+- **`arquivo cookies.txt` agora vem selecionado** quando o arquivo existe na pasta
+  (`html_opcao_cookies()`), e os seletores de cookies e pausa têm `autocomplete="off"`, para o
+  navegador não restaurar um valor antigo ao recarregar a página.
+- **Resumo ao lado de "Opções"** ("· cookies.txt · pausa 6 s"), atualizado a cada mudança. Se
+  o cookie escolhido for chrome, edge, brave ou opera no Windows, o resumo fica em vermelho com
+  "(não funciona no Windows)".
+- **Dica de erro inteligente:** quando a falha é bloqueio de IP ou limite de requisições
+  (`IpBlocked`, `RequestBlocked`, `429`, `Too Many Requests`), a dica manda esperar e reduzir a
+  fila, e **não** sugere mais o Whisper (ele também baixa o áudio do YouTube, então seria
+  bloqueado igual). A detecção usa `429` para não confundir com "1429".
+- A mensagem de `IpBlocked` deixou de sugerir `--cookies-from-browser chrome` (não funciona no
+  Windows) e passou a sugerir esperar ou usar `cookies.txt`. Vale também para a CLI.
+- **Armadilha do meu próprio script de edição:** escrever `` em texto Python comum gera um
+  caractere de backspace no arquivo, em vez de `` da expressão regular. Os testes de
+  `foi_bloqueio` pegaram o caso `1429`. Em edição por script, usar string crua (`r"..."`).
+
 ### Alterado — novo visual, com tema claro e escuro (21/09/2026)
 
 - **Interface refeita** para um visual mais limpo e fluido: campo de links em destaque

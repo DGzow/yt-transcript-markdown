@@ -162,8 +162,8 @@ def _resumo(exc: Exception) -> str:
     """Reduz as mensagens quilométricas da biblioteca a uma linha útil."""
     texto = " ".join(str(exc).split())
     if "blocking requests from your IP" in texto or "RequestBlocked" in type(exc).__name__:
-        return ("o YouTube bloqueou a requisição por suspeita de robô. "
-                "Use --cookies-from-browser chrome.")
+        return ("o YouTube bloqueou este IP (excesso de requisições ou suspeita de robô). "
+                "Espere algumas horas; se persistir, use um cookies.txt (--cookies).")
     if "age" in texto.lower() and "restrict" in texto.lower():
         return "vídeo com restrição de idade — precisa de cookies de uma conta logada."
     if "unavailable" in texto.lower():

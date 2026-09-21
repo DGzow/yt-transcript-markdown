@@ -69,6 +69,25 @@ if ($('wh')) {
   sync();
 }
 
+// Resumo das opções ao lado do botão "Opções", para você ver o que está valendo sem abrir.
+// No Windows, ler cookies direto do Chrome/Edge/Brave/Opera não funciona (o navegador
+// criptografa o banco), então essa escolha vira um aviso em vermelho.
+const NAVEGADORES_QUEBRADOS = ['chrome', 'edge', 'brave', 'opera'];
+function resumoOpcoes() {
+  const c = $('cookies').value, p = Number($('pausa').value);
+  const noWindows = /Windows/.test(navigator.userAgent);
+  const quebrado = noWindows && NAVEGADORES_QUEBRADOS.includes(c);
+  const partes = [
+    c === '' ? 'sem cookies' : c === 'arquivo' ? 'cookies.txt' : 'cookies: ' + c + (quebrado ? ' (não funciona no Windows)' : ''),
+    p ? 'pausa ' + p + ' s' : 'sem pausa',
+  ];
+  if ($('wh') && $('wh').checked) partes.push('Whisper');
+  $('opcoes-resumo').textContent = '· ' + partes.join(' · ');
+  $('opcoes-resumo').classList.toggle('alerta', quebrado);
+}
+['cookies', 'pausa', 'ts'].concat($('wh') ? ['wh'] : []).forEach(id => $(id).addEventListener('change', resumoOpcoes));
+resumoOpcoes();
+
 // Barra de progresso sob o campo: 'off' (invisível), 'indet' (trabalhando, sem total
 // conhecido) ou 'det' (fração p, de 0 a 1).
 const barra = $('progresso');
@@ -157,7 +176,7 @@ function alternarLink(e) {
   // Cartão que depende do cookies.txt: já deixa o seletor de cookies pronto.
   if (b.dataset.cookies && !ligada) {
     const opcao = [...$('cookies').options].find(o => o.value === 'arquivo');
-    if (opcao && !opcao.disabled) $('cookies').value = 'arquivo';
+    if (opcao && !opcao.disabled) { $('cookies').value = 'arquivo'; resumoOpcoes(); }
     else toast('Falta o cookies.txt na pasta do app (veja o README)');
   }
 }

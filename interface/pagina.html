@@ -74,12 +74,13 @@
     <summary>
       <svg class="ic" aria-hidden="true"><use href="#i-ajustes"/></svg>
       Opções
+      <span class="opcoes-resumo" id="opcoes-resumo"></span>
       <svg class="ic seta" aria-hidden="true"><use href="#i-baixo"/></svg>
     </summary>
     <div class="opcoes-grade">
       <div class="field">
         <label class="field-label" for="cookies">Cookies</label>
-        <select class="picker" id="cookies" title="Empresta a sessão logada quando o YouTube esconde a legenda">
+        <select class="picker" id="cookies" autocomplete="off" title="Empresta a sessão logada quando o YouTube esconde a legenda">
           <option value="">nenhum</option>
           <!--COOKIES_ARQUIVO-->
           <option value="chrome">chrome</option>
@@ -92,7 +93,7 @@
       </div>
       <div class="field">
         <label class="field-label" for="pausa">Pausa entre vídeos</label>
-        <select class="picker" id="pausa" title="Espera entre um vídeo e outro da fila, para o YouTube não bloquear o seu IP">
+        <select class="picker" id="pausa" autocomplete="off" title="Espera entre um vídeo e outro da fila, para o YouTube não bloquear o seu IP">
           <option value="0">nenhuma</option>
           <option value="3">3 s</option>
           <option value="6" selected>6 s</option>

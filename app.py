@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 import threading
@@ -108,6 +109,22 @@ def bloco_whisper() -> str:
     )
 
 
+DICA_BLOQUEIO = (
+    "O YouTube está limitando o seu IP por excesso de requisições. Espere algumas horas "
+    "antes de tentar de novo e transcreva menos vídeos por vez (aumente a pausa em Opções). "
+    "O Whisper não resolve: ele também precisa baixar o áudio do YouTube."
+)
+
+
+def foi_bloqueio(detalhes: list[str]) -> bool:
+    """True se as falhas registradas indicam bloqueio de IP / limite de requisições."""
+    texto = " ".join(detalhes).lower()
+    return bool(
+        any(t in texto for t in ("ipblocked", "requestblocked", "too many requests"))
+        or re.search(r"\b429\b", texto)
+    )
+
+
 def cookies_txt_disponivel() -> Path | None:
     """Procura um cookies.txt exportado do navegador, na pasta do app."""
     for nome in ("cookies.txt", "www.youtube.com_cookies.txt", "youtube.com_cookies.txt"):
@@ -115,6 +132,15 @@ def cookies_txt_disponivel() -> Path | None:
         if caminho.is_file():
             return caminho
     return None
+
+
+def html_opcao_cookies() -> str:
+    """A opção "arquivo cookies.txt" do seletor. Vem SELECIONADA quando o arquivo existe:
+    é o único jeito de cookies que funciona no Windows (Chrome/Edge criptografam os deles)."""
+    arquivo = cookies_txt_disponivel()
+    if arquivo:
+        return f'<option value="arquivo" selected>arquivo cookies.txt ({arquivo.name})</option>'
+    return '<option value="arquivo" disabled>arquivo cookies.txt (não encontrado)</option>'
 
 
 def opcoes_cookies(cookies: str | None) -> tuple[str | None, str | None, str | None]:
@@ -317,7 +343,9 @@ def transcribe(
 
     if not snippets:
         dica = ""
-        if not whisper and audio.whisper_disponivel():
+        if foi_bloqueio(detalhes):
+            dica = DICA_BLOQUEIO  # o motivo real; sugerir Whisper aqui só enganaria
+        elif not whisper and audio.whisper_disponivel():
             dica = ("Este vídeo não tem legenda para baixar. Ligue "
                     "\"Transcrever o áudio\" aqui em cima para o Whisper gerar a "
                     "transcrição na sua máquina.")
@@ -420,16 +448,9 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 aviso = ""
 
-            arquivo = cookies_txt_disponivel()
-            if arquivo:
-                opcao = f'<option value="arquivo">arquivo cookies.txt ({arquivo.name})</option>'
-            else:
-                opcao = ('<option value="arquivo" disabled>arquivo cookies.txt '
-                         '(não encontrado)</option>')
-
             html = (
                 carregar_pagina().replace("<!--AVISO-->", aviso)
-                .replace("<!--COOKIES_ARQUIVO-->", opcao)
+                .replace("<!--COOKIES_ARQUIVO-->", html_opcao_cookies())
                 .replace("<!--WHISPER-->", bloco_whisper())
             )
             self._send(200, html.encode("utf-8"), "text/html; charset=utf-8")
